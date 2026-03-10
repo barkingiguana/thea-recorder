@@ -1,62 +1,163 @@
 name: Release
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  id-token: write
 
 jobs:
-  version-check:
-    name: Verify version consistency
+  check:
+    name: Determine next version
+    # Skip version-bump commits pushed by this workflow
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.ver.outputs.version }}
+      should_release: ${{ steps.bump.outputs.should_release }}
+      next_version: ${{ steps.bump.outputs.next_version }}
+      bump_type: ${{ steps.bump.outputs.bump_type }}
     steps:
       - uses: actions/checkout@v4
-      - name: Read VERSION
-        id: ver
-        run: echo "version=$(cat VERSION | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
-      - name: Check tag matches VERSION
+        with:
+          fetch-depth: 0
+
+      - name: Compute semver bump from commits
+        id: bump
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          VER="$(cat VERSION | tr -d '[:space:]')"
-          if [ "$TAG" != "$VER" ]; then
-            echo "::error::Tag v$TAG does not match VERSION file ($VER)"
-            exit 1
+          # Find the latest semver tag
+          LAST_TAG="$(git tag -l 'v[0-9]*' --sort=-v:refname | head -1)"
+
+          if [ -z "$LAST_TAG" ]; then
+            echo "No existing version tag found — skipping"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-      - name: Check all package versions match
+
+          CURRENT="${LAST_TAG#v}"
+          RANGE="${LAST_TAG}..HEAD"
+          COMMITS="$(git log "$RANGE" --pretty=format:"%s" 2>/dev/null || true)"
+
+          if [ -z "$COMMITS" ]; then
+            echo "No new commits since $LAST_TAG"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BUMP="none"
+
+          # Check for breaking changes
+          if echo "$COMMITS" | grep -qiE '^[a-z]+(\(.+\))?!:|BREAKING[ -]CHANGE'; then
+            BUMP="major"
+          # Check for features
+          elif echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
+            BUMP="minor"
+          # Check for fixes
+          elif echo "$COMMITS" | grep -qE '^fix(\(.+\))?:'; then
+            BUMP="patch"
+          fi
+
+          if [ "$BUMP" = "none" ]; then
+            echo "No releasable commits since $LAST_TAG"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          case "$BUMP" in
+            major) NEXT="$((MAJOR + 1)).0.0" ;;
+            minor) NEXT="${MAJOR}.$((MINOR + 1)).0" ;;
+            patch) NEXT="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+          esac
+
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "next_version=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "bump_type=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "Bump: $BUMP ($CURRENT -> $NEXT)"
+
+  release:
+    name: Bump, tag, and release
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ needs.check.outputs.next_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure git
         run: |
-          VER="$(cat VERSION | tr -d '[:space:]')"
-          FAIL=0
-          check() { if [ "$2" != "$VER" ]; then echo "::error::$1 has version $2, expected $VER"; FAIL=1; fi; }
-          check "pyproject.toml" "$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')"
-          check "src/thea/cli.py" "$(grep '"version":' src/thea/cli.py | sed 's/.*"\([0-9][^"]*\)".*/\1/')"
-          check "sdks/python/pyproject.toml" "$(grep '^version' sdks/python/pyproject.toml | sed 's/.*"\(.*\)".*/\1/')"
-          check "sdks/node/package.json" "$(node -p "require('./sdks/node/package.json').version")"
-          check "sdks/ruby/lib/recorder.rb" "$(grep 'VERSION' sdks/ruby/lib/recorder.rb | sed 's/.*"\(.*\)".*/\1/')"
-          check "sdks/java/pom.xml" "$(grep '<version>' sdks/java/pom.xml | head -1 | sed 's/.*<version>\(.*\)<\/version>.*/\1/')"
-          exit $FAIL
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump all versions
+        run: |
+          VER="${{ needs.check.outputs.next_version }}"
+          bash scripts/bump-version.sh "$VER"
+
+      - name: Commit and tag
+        run: |
+          VER="${{ needs.check.outputs.next_version }}"
+          git add -A
+          git commit -m "chore: bump version to ${VER}" || true
+          git tag "v${VER}"
+          git push origin main --tags
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          VER="${{ needs.check.outputs.next_version }}"
+          CURRENT="$(git tag -l 'v*' --sort=-v:refname | grep -v "v${VER}" | head -1)"
+          if [ -n "$CURRENT" ]; then
+            NOTES="$(git log "${CURRENT}..v${VER}" --pretty=format:"- %s" | grep -v "^- chore: bump")"
+          else
+            NOTES="$(git log "v${VER}" --pretty=format:"- %s" | grep -v "^- chore: bump")"
+          fi
+          echo "notes<<EOFNOTES" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOFNOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER="${{ needs.check.outputs.next_version }}"
+          gh release create "v${VER}" \
+            --title "v${VER}" \
+            --notes "${{ steps.notes.outputs.notes }}"
 
   python:
     name: Publish Python to PyPI
-    needs: version-check
+    needs: release
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.version }}
       - uses: astral-sh/setup-uv@v4
       - run: uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
 
   go:
     name: Publish Go SDK
-    needs: version-check
+    needs: release
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.version }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: sdks/go/go.mod
@@ -64,7 +165,7 @@ jobs:
       - run: cd sdks/go && go vet ./thea/
       - name: Tag Go module
         run: |
-          VER="${{ needs.version-check.outputs.version }}"
+          VER="${{ needs.release.outputs.version }}"
           TAG="sdks/go/v${VER}"
           git tag "$TAG"
           git push origin "$TAG"
