@@ -18,7 +18,7 @@ jobs:
           FAIL=0
           check() { if [ "$2" != "$VER" ]; then echo "::error::$1 has version $2, expected $VER"; FAIL=1; fi; }
           check "pyproject.toml" "$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')"
-          check "src/recorder/cli.py" "$(grep '"version":' src/recorder/cli.py | sed 's/.*"\([0-9][^"]*\)".*/\1/')"
+          check "src/thea/cli.py" "$(grep '"version":' src/thea/cli.py | sed 's/.*"\([0-9][^"]*\)".*/\1/')"
           check "sdks/python/pyproject.toml" "$(grep '^version' sdks/python/pyproject.toml | sed 's/.*"\(.*\)".*/\1/')"
           check "sdks/node/package.json" "$(node -p "require('./sdks/node/package.json').version")"
           check "sdks/ruby/lib/recorder.rb" "$(grep 'VERSION' sdks/ruby/lib/recorder.rb | sed 's/.*"\(.*\)".*/\1/')"
