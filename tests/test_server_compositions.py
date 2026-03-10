@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from recorder.server import create_app
+from thea.server import create_app
 
 
 @pytest.fixture
@@ -40,9 +40,9 @@ class TestCompositionsCreate:
         assert resp.status_code == 400
         assert "layout" in resp.get_json()["error"]
 
-    @patch("recorder.composer.CompositionManager.create")
+    @patch("thea.composer.CompositionManager.create")
     def test_success(self, mock_create, client):
-        from recorder.composer import CompositionResult
+        from thea.composer import CompositionResult
         mock_create.return_value = CompositionResult(name="demo", status="rendering")
 
         resp = client.post("/compositions", json={
@@ -64,7 +64,7 @@ class TestCompositionsCreate:
         assert call_spec.recordings == ["a", "b"]
         assert len(call_spec.highlights) == 1
 
-    @patch("recorder.composer.CompositionManager.create")
+    @patch("thea.composer.CompositionManager.create")
     def test_duplicate_returns_409(self, mock_create, client):
         mock_create.side_effect = ValueError("already exists")
         resp = client.post("/compositions", json={
@@ -94,9 +94,9 @@ class TestCompositionsGet:
         resp = client.get("/compositions/nope")
         assert resp.status_code == 404
 
-    @patch("recorder.composer.CompositionManager.get")
+    @patch("thea.composer.CompositionManager.get")
     def test_found(self, mock_get, client):
-        from recorder.composer import CompositionResult, CompositionSpec
+        from thea.composer import CompositionResult, CompositionSpec
         spec = CompositionSpec(name="demo", recordings=["a", "b"])
         result = CompositionResult(name="demo", status="complete", output_path="/tmp/demo.mp4")
         mock_get.return_value = (spec, result)
@@ -114,7 +114,7 @@ class TestCompositionsDelete:
         resp = client.delete("/compositions/nope")
         assert resp.status_code == 404
 
-    @patch("recorder.composer.CompositionManager.delete")
+    @patch("thea.composer.CompositionManager.delete")
     def test_success(self, mock_delete, client):
         mock_delete.return_value = True
         resp = client.delete("/compositions/demo")
@@ -135,7 +135,7 @@ class TestCompositionsHighlights:
         })
         assert resp.status_code == 400
 
-    @patch("recorder.composer.CompositionManager.add_highlight")
+    @patch("thea.composer.CompositionManager.add_highlight")
     def test_success(self, mock_add, client):
         resp = client.post("/compositions/demo/highlights", json={
             "recording": "a", "time": 3.5, "duration": 2.0,
@@ -147,9 +147,9 @@ class TestCompositionsHighlights:
         resp = client.get("/compositions/nope/highlights")
         assert resp.status_code == 404
 
-    @patch("recorder.composer.CompositionManager.get")
+    @patch("thea.composer.CompositionManager.get")
     def test_list_success(self, mock_get, client):
-        from recorder.composer import CompositionResult, CompositionSpec, Highlight
+        from thea.composer import CompositionResult, CompositionSpec, Highlight
         spec = CompositionSpec(
             name="demo", recordings=["a"],
             highlights=[Highlight("a", 1.0, 2.0)],

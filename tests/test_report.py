@@ -1,6 +1,6 @@
 import os
 
-from recorder.report import generate_report, _escape, _step_table_html
+from thea.report import generate_report, _escape, _step_table_html
 
 
 class TestEscape:

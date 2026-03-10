@@ -11,16 +11,16 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from recorder.cli import main
+from thea.cli import main
 
 
 @pytest.fixture
 def mock_server(tmp_path):
     """Start a real Flask app on a random port for CLI testing."""
-    with patch("recorder.recorder.subprocess.Popen"), \
-         patch("recorder.recorder.subprocess.run"), \
-         patch("recorder.recorder.os.path.exists", return_value=True):
-        from recorder.server import create_app
+    with patch("thea.recorder.subprocess.Popen"), \
+         patch("thea.recorder.subprocess.run"), \
+         patch("thea.recorder.os.path.exists", return_value=True):
+        from thea.server import create_app
         app = create_app(output_dir=str(tmp_path), display=42)
         app.config["TESTING"] = True
 

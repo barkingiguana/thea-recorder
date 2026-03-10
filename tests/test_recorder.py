@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from recorder.recorder import Recorder, PANEL_HEIGHT, LINE_HEIGHT, _find_system_fonts, _FONT_SEARCH
+from thea.recorder import Recorder, PANEL_HEIGHT, LINE_HEIGHT, _find_system_fonts, _FONT_SEARCH
 
 
 class TestDisplayString:
@@ -26,7 +26,7 @@ class TestFonts:
         assert r._font == "/custom/regular.ttf"
         assert r._font_bold == "/custom/bold.ttf"
 
-    @patch("recorder.recorder.os.path.exists", return_value=False)
+    @patch("thea.recorder.os.path.exists", return_value=False)
     def test_no_system_fonts_returns_empty(self, _exists):
         regular, bold = _find_system_fonts()
         assert regular == ""
@@ -38,7 +38,7 @@ class TestFonts:
         font.write_text("")
         bold.write_text("")
         search = [(str(font), str(bold))]
-        with patch("recorder.recorder._FONT_SEARCH", search):
+        with patch("thea.recorder._FONT_SEARCH", search):
             r, b = _find_system_fonts()
             assert r == str(font)
             assert b == str(bold)
@@ -65,16 +65,16 @@ class TestFonts:
         found.write_text("")
         found_bold.write_text("")
         search = [missing, (str(found), str(found_bold))]
-        with patch("recorder.recorder._FONT_SEARCH", search):
+        with patch("thea.recorder._FONT_SEARCH", search):
             r, b = _find_system_fonts()
             assert r == str(found)
             assert b == str(found_bold)
 
 
 class TestStartDisplay:
-    @patch("recorder.recorder.subprocess.run")
-    @patch("recorder.recorder.os.path.exists", return_value=True)
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.run")
+    @patch("thea.recorder.os.path.exists", return_value=True)
+    @patch("thea.recorder.subprocess.Popen")
     def test_with_panels_adds_panel_height(self, mock_popen, _exists, _run):
         r = Recorder(display=42, display_size="1920x1080")
         r.add_panel("header", title="Header")
@@ -87,9 +87,9 @@ class TestStartDisplay:
         assert f"1920x{expected_h}x24" in args
         r.cleanup()
 
-    @patch("recorder.recorder.subprocess.run")
-    @patch("recorder.recorder.os.path.exists", return_value=True)
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.run")
+    @patch("thea.recorder.os.path.exists", return_value=True)
+    @patch("thea.recorder.subprocess.Popen")
     def test_without_panels_still_allocates_panel_height(self, mock_popen, _exists, _run):
         r = Recorder(display=42, display_size="1920x1080")
         r.start_display()
@@ -98,9 +98,9 @@ class TestStartDisplay:
         expected_h = 1080 + PANEL_HEIGHT
         assert f"1920x{expected_h}x24" in args
 
-    @patch("recorder.recorder.subprocess.run")
-    @patch("recorder.recorder.os.path.exists", return_value=True)
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.run")
+    @patch("thea.recorder.os.path.exists", return_value=True)
+    @patch("thea.recorder.subprocess.Popen")
     def test_sets_cursor(self, _popen, _exists, mock_run):
         r = Recorder(display=42)
         r.start_display()
@@ -110,9 +110,9 @@ class TestStartDisplay:
         assert "xsetroot" in args
         assert "-cursor_name" in args
 
-    @patch("recorder.recorder.subprocess.run")
-    @patch("recorder.recorder.os.path.exists", return_value=True)
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.run")
+    @patch("thea.recorder.os.path.exists", return_value=True)
+    @patch("thea.recorder.subprocess.Popen")
     def test_stop_display_terminates_xvfb(self, mock_popen, _exists, _run):
         proc = Mock()
         mock_popen.return_value = proc
@@ -127,9 +127,9 @@ class TestStartDisplay:
         r = Recorder()
         r.stop_display()  # Should not raise
 
-    @patch("recorder.recorder.subprocess.run")
-    @patch("recorder.recorder.os.path.exists", return_value=True)
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.run")
+    @patch("thea.recorder.os.path.exists", return_value=True)
+    @patch("thea.recorder.subprocess.Popen")
     def test_custom_resolution(self, mock_popen, _exists, _run):
         r = Recorder(display=1, display_size="1280x720")
         r.start_display()
@@ -138,9 +138,9 @@ class TestStartDisplay:
         expected_h = 720 + PANEL_HEIGHT
         assert f"1280x{expected_h}x24" in args
 
-    @patch("recorder.recorder.subprocess.run")
-    @patch("recorder.recorder.os.path.exists", return_value=True)
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.run")
+    @patch("thea.recorder.os.path.exists", return_value=True)
+    @patch("thea.recorder.subprocess.Popen")
     def test_display_env_passed_to_xsetroot(self, _popen, _exists, mock_run):
         r = Recorder(display=77)
         r.start_display()
@@ -334,7 +334,7 @@ class TestPanelLayout:
 
 
 class TestRecording:
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_start_recording_creates_output_dir(self, mock_popen, tmp_path):
         out = tmp_path / "videos"
         r = Recorder(output_dir=str(out))
@@ -342,7 +342,7 @@ class TestRecording:
 
         assert out.exists()
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_with_panels_includes_vf_filter(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path))
         r.add_panel("overlay", title="Overlay")
@@ -356,7 +356,7 @@ class TestRecording:
         assert "drawtext" in vf
         r.cleanup()
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_without_panels_no_vf_filter(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path))
         r.start_recording("test")
@@ -364,7 +364,7 @@ class TestRecording:
         args = mock_popen.call_args[0][0]
         assert "-vf" not in args
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_with_panels_video_size_includes_panel_height(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path), display_size="1920x1080")
         r.add_panel("banner")
@@ -375,7 +375,7 @@ class TestRecording:
         assert args[vs_idx + 1] == f"1920x{1080 + PANEL_HEIGHT}"
         r.cleanup()
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_without_panels_video_size_display_only(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path), display_size="1920x1080")
         r.start_recording("test")
@@ -384,7 +384,7 @@ class TestRecording:
         vs_idx = args.index("-video_size")
         assert args[vs_idx + 1] == "1920x1080"
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_start_recording_sanitises_filename(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path))
         r.start_recording("Weird / Name & Stuff!")
@@ -393,7 +393,7 @@ class TestRecording:
         assert "/" not in os.path.basename(r._output_path)
         assert "&" not in os.path.basename(r._output_path)
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_stop_recording_sends_q(self, mock_popen, tmp_path):
         proc = Mock()
         proc.returncode = 0
@@ -412,7 +412,7 @@ class TestRecording:
         r = Recorder()
         assert r.stop_recording() is None
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_multiple_panels_filter_has_separators(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path), display_size="1920x1080")
         r.add_panel("first", title="First")
@@ -427,7 +427,7 @@ class TestRecording:
         assert "drawbox=x=1280:y=1080:w=1" in vf
         r.cleanup()
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_filter_uses_custom_font(self, mock_popen, tmp_path):
         r = Recorder(
             output_dir=str(tmp_path),
@@ -444,7 +444,7 @@ class TestRecording:
         assert "/my/bold.ttf" in vf
         r.cleanup()
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_fixed_width_panel_in_filter(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path), display_size="1920x1080")
         r.add_panel("sidebar", title="Sidebar", width=160)
@@ -457,7 +457,7 @@ class TestRecording:
         assert "drawbox=x=160:y=1080:w=1" in vf
         r.cleanup()
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_filename_truncated_to_120_chars(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path))
         long_name = "a" * 200
@@ -466,7 +466,7 @@ class TestRecording:
         basename = os.path.basename(r._output_path).replace(".mp4", "")
         assert len(basename) <= 120
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_ffmpeg_uses_libx264(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path))
         r.start_recording("test")
@@ -474,7 +474,7 @@ class TestRecording:
         args = mock_popen.call_args[0][0]
         assert "libx264" in args
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_ffmpeg_uses_configured_framerate(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path), framerate=30)
         r.start_recording("test")
@@ -483,7 +483,7 @@ class TestRecording:
         fr_idx = args.index("-framerate")
         assert args[fr_idx + 1] == "30"
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_filter_includes_clock(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path))
         r.add_panel("status")
@@ -495,7 +495,7 @@ class TestRecording:
         assert "localtime" in vf
         r.cleanup()
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_filter_includes_rec_indicator(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path))
         r.add_panel("status")
@@ -507,7 +507,7 @@ class TestRecording:
         assert "REC" in vf
         r.cleanup()
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_panel_title_with_colon_escaped(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path))
         r.add_panel("info", title="Status: OK")
@@ -521,7 +521,7 @@ class TestRecording:
 
 
 class TestRecordingElapsed:
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_elapsed_increases_after_start(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path))
         assert r.recording_elapsed == 0.0
@@ -529,7 +529,7 @@ class TestRecordingElapsed:
         r.start_recording("test")
         assert r.recording_elapsed > 0.0
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_elapsed_resets_after_stop(self, mock_popen, tmp_path):
         r = Recorder(output_dir=str(tmp_path))
         r.start_recording("test")
@@ -543,9 +543,9 @@ class TestRecordingElapsed:
 
 
 class TestCleanup:
-    @patch("recorder.recorder.subprocess.run")
-    @patch("recorder.recorder.os.path.exists", return_value=True)
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.run")
+    @patch("thea.recorder.os.path.exists", return_value=True)
+    @patch("thea.recorder.subprocess.Popen")
     def test_cleanup_stops_everything(self, mock_popen, _exists, _run, tmp_path):
         ffmpeg_proc = Mock()
         ffmpeg_proc.returncode = 0

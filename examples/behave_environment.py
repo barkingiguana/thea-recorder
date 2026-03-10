@@ -17,7 +17,7 @@ import os
 import re
 import time
 
-from recorder import Recorder, generate_report
+from thea import Recorder, generate_report
 
 
 def _render_scenario_panel(recorder, header, step_events):

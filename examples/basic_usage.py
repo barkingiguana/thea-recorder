@@ -4,7 +4,7 @@ This shows the core API without any test framework.
 Requires Xvfb and ffmpeg to be installed.
 """
 
-from recorder import Recorder, generate_report
+from thea import Recorder, generate_report
 
 # 1. Create a recorder
 recorder = Recorder(

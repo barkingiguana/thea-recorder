@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from recorder.composer import (
+from thea.composer import (
     CompositionManager,
     CompositionResult,
     CompositionSpec,
@@ -82,7 +82,7 @@ class TestComputeLayout:
 
 
 class TestProbeDuration:
-    @patch("recorder.composer.subprocess.run")
+    @patch("thea.composer.subprocess.run")
     def test_returns_duration(self, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -90,7 +90,7 @@ class TestProbeDuration:
         )
         assert probe_duration("/tmp/test.mp4") == 12.5
 
-    @patch("recorder.composer.subprocess.run")
+    @patch("thea.composer.subprocess.run")
     def test_failure_raises(self, mock_run):
         mock_run.return_value = MagicMock(returncode=1, stderr="bad file")
         with pytest.raises(RuntimeError, match="ffprobe failed"):
@@ -98,7 +98,7 @@ class TestProbeDuration:
 
 
 class TestProbeResolution:
-    @patch("recorder.composer.subprocess.run")
+    @patch("thea.composer.subprocess.run")
     def test_returns_width_height(self, mock_run):
         mock_run.return_value = MagicMock(
             returncode=0,
@@ -205,9 +205,9 @@ class TestResolveRecordingPath:
 
 
 class TestRenderComposition:
-    @patch("recorder.composer._find_system_fonts", return_value=("font.ttf", "bold.ttf"))
-    @patch("recorder.composer.probe_duration", return_value=10.0)
-    @patch("recorder.composer.subprocess.run")
+    @patch("thea.composer._find_system_fonts", return_value=("font.ttf", "bold.ttf"))
+    @patch("thea.composer.probe_duration", return_value=10.0)
+    @patch("thea.composer.subprocess.run")
     def test_happy_path(self, mock_run, _dur, _fonts, tmp_path):
         # Create fake source recordings
         for name in ["a", "b"]:
@@ -229,9 +229,9 @@ class TestRenderComposition:
         assert cmd[0] == "ffmpeg"
         assert "-filter_complex" in cmd
 
-    @patch("recorder.composer._find_system_fonts", return_value=("", ""))
-    @patch("recorder.composer.probe_duration", return_value=5.0)
-    @patch("recorder.composer.subprocess.run")
+    @patch("thea.composer._find_system_fonts", return_value=("", ""))
+    @patch("thea.composer.probe_duration", return_value=5.0)
+    @patch("thea.composer.subprocess.run")
     def test_ffmpeg_failure(self, mock_run, _dur, _fonts, tmp_path):
         for name in ["a", "b"]:
             (tmp_path / f"{name}.mp4").write_bytes(b"fake")
@@ -300,7 +300,7 @@ class TestCompositionManager:
         mgr = CompositionManager("/tmp")
         assert mgr.delete("nope") is False
 
-    @patch("recorder.composer.render_composition")
+    @patch("thea.composer.render_composition")
     def test_create_and_get(self, mock_render, tmp_path):
         mock_render.return_value = str(tmp_path / "out.mp4")
 
@@ -318,7 +318,7 @@ class TestCompositionManager:
         _, result = got
         assert result.status in ("rendering", "complete")
 
-    @patch("recorder.composer.render_composition")
+    @patch("thea.composer.render_composition")
     def test_create_duplicate_raises(self, mock_render):
         mock_render.return_value = "/tmp/out.mp4"
         mgr = CompositionManager("/tmp")
@@ -326,7 +326,7 @@ class TestCompositionManager:
         with pytest.raises(ValueError, match="already exists"):
             mgr.create(CompositionSpec(name="dup", recordings=["b"]))
 
-    @patch("recorder.composer.render_composition")
+    @patch("thea.composer.render_composition")
     def test_delete(self, mock_render):
         mock_render.return_value = "/tmp/out.mp4"
         mgr = CompositionManager("/tmp")
@@ -334,7 +334,7 @@ class TestCompositionManager:
         assert mgr.delete("del") is True
         assert mgr.get("del") is None
 
-    @patch("recorder.composer.render_composition")
+    @patch("thea.composer.render_composition")
     def test_list_all(self, mock_render):
         mock_render.return_value = "/tmp/out.mp4"
         mgr = CompositionManager("/tmp")

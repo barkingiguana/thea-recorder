@@ -7,13 +7,13 @@ that a BDD framework integration would use.
 import os
 from unittest.mock import patch, Mock
 
-from recorder import Recorder, generate_report
+from thea import Recorder, generate_report
 
 
 class TestRecordingLifecycle:
     """Simulates the full lifecycle: setup -> record scenarios -> report."""
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_full_lifecycle(self, mock_popen, tmp_path):
         proc = Mock()
         proc.returncode = 0
@@ -85,7 +85,7 @@ class TestRecordingLifecycle:
         r.cleanup()
         assert not r._panels
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_dynamic_panels(self, mock_popen, tmp_path):
         """Panels can be added/removed between scenarios."""
         proc = Mock()
@@ -116,7 +116,7 @@ class TestRecordingLifecycle:
 
         r.cleanup()
 
-    @patch("recorder.recorder.subprocess.Popen")
+    @patch("thea.recorder.subprocess.Popen")
     def test_panel_scrolling_during_scenario(self, mock_popen, tmp_path):
         """Panel content scrolls as steps execute."""
         proc = Mock()
