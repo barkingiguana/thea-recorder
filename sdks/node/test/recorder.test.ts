@@ -304,7 +304,7 @@ describe("RecorderClient – error handling", () => {
 
   beforeAll(async () => {
     server = createMockServer({
-      "GET /health": () => ({ status: 503, body: { error: "unhealthy" } }),
+      "GET /health": () => ({ status: 200, body: { status: "ok" } }),
       "POST /recording/start": () => ({
         status: 409,
         body: { error: "already recording" },
@@ -328,6 +328,23 @@ describe("RecorderClient – error handling", () => {
       expect(re.status).toBe(409);
       expect(re.body).toContain("already recording");
     }
+  });
+
+});
+
+describe("RecorderClient – waitUntilReady timeout", () => {
+  let server: http.Server;
+  let port: number;
+
+  beforeAll(async () => {
+    server = createMockServer({
+      "GET /health": () => ({ status: 503, body: { error: "unhealthy" } }),
+    });
+    port = await listenOnRandomPort(server);
+  });
+
+  afterAll(async () => {
+    await closeServer(server);
   });
 
   it("waitUntilReady times out when server is unhealthy", async () => {

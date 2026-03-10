@@ -1,9 +1,9 @@
-// Package recorder provides a Go client for the thea-recorder HTTP server.
+// Package thea provides a Go client for the thea-recorder HTTP server.
 //
 // The client wraps every REST endpoint exposed by the recorder service and
 // requires only the standard library (net/http). Every method accepts a
 // [context.Context] so callers can control timeouts and cancellation.
-package recorder
+package thea
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -84,6 +85,8 @@ type RecordingInfo struct {
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	readyOnce  sync.Once
+	readyErr   error
 }
 
 // NewClient creates a new Client. If baseURL is empty the THEA_URL
@@ -232,6 +235,9 @@ func (c *Client) GetRecordingInfo(ctx context.Context, name string) (*RecordingI
 // DownloadRecording streams the MP4 for the named recording into w
 // (GET /recordings/{name}).
 func (c *Client) DownloadRecording(ctx context.Context, name string, w io.Writer) error {
+	if err := c.ensureReady(ctx); err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/recordings/"+name, nil)
 	if err != nil {
 		return err
@@ -352,7 +358,20 @@ func (c *Client) doJSON(ctx context.Context, method, urlPath string, body any, w
 	return json.NewDecoder(resp.Body).Decode(dest)
 }
 
+func (c *Client) ensureReady(ctx context.Context) error {
+	c.readyOnce.Do(func() {
+		c.readyErr = c.WaitUntilReady(ctx, 30*time.Second)
+	})
+	return c.readyErr
+}
+
 func (c *Client) doRequest(ctx context.Context, method, urlPath string, body any) (*http.Response, error) {
+	// Auto-ready: wait for the server on the first non-health request.
+	if urlPath != "/health" {
+		if err := c.ensureReady(ctx); err != nil {
+			return nil, err
+		}
+	}
 	u := c.baseURL + path.Clean("/"+urlPath)
 	var bodyReader io.Reader
 	if body != nil {

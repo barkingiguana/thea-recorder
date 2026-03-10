@@ -411,7 +411,7 @@ client = RecorderClient(os.environ[<span class="str">"THEA_URL"</span>])
     <ul>
         <li><strong>Always set <code>--shm-size=2g</code></strong> (or higher) in Docker. Chrome and Xvfb need shared memory. Without it you will get crashes.</li>
         <li><strong>Mount a volume</strong> for the recordings directory so you can access videos after the container exits.</li>
-        <li><strong>Use the healthcheck</strong> in Compose or <code>wait_until_ready()</code> in your SDK. The server may take a moment to start, especially in resource-constrained CI environments.</li>
+        <li><strong>Use the healthcheck</strong> in Compose. The SDK clients now auto-wait for the server on their first API call, so explicit <code>wait_until_ready()</code> calls are no longer needed.</li>
         <li><strong>Graceful shutdown works.</strong> The server handles <code>SIGTERM</code>, so <code>docker stop</code> will not lose a recording in progress.</li>
         <li><strong>Upload artifacts on failure.</strong> Always upload recordings even when tests fail &mdash; those are the videos you most want to watch.</li>
         <li><strong>Font rendering:</strong> Install <code>fonts-liberation</code> or similar in your image for readable text in panel overlays.</li>

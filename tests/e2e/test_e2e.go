@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/barkingiguana/thea-recorder/sdks/go/recorder"
+	"github.com/barkingiguana/thea-recorder/sdks/go/thea"
 )
 
 func main() {
@@ -16,7 +16,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	client := recorder.NewClient(url)
+	client := thea.NewClient(url)
 
 	fmt.Println("[go] Waiting for server...")
 	if err := client.WaitUntilReady(ctx, 30*time.Second); err != nil {

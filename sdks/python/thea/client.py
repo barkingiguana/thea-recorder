@@ -62,6 +62,7 @@ class RecorderClient:
         self.base_url: str = resolved.rstrip("/")
         self.timeout: float = timeout
         self._session_prefix: str = ""  # empty = default session
+        self._ready: bool = False
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -69,6 +70,11 @@ class RecorderClient:
 
     def _url(self, path: str) -> str:
         return f"{self.base_url}{self._session_prefix}{path}"
+
+    def _ensure_ready(self) -> None:
+        if not self._ready:
+            self.wait_until_ready()
+            self._ready = True
 
     def _request(
         self,
@@ -79,6 +85,8 @@ class RecorderClient:
         timeout: float | None = None,
     ) -> dict[str, Any]:
         """Send a JSON request and return the decoded response body."""
+        if path != "/health":
+            self._ensure_ready()
         data: bytes | None = None
         headers: dict[str, str] = {}
         if body is not None:
@@ -119,6 +127,7 @@ class RecorderClient:
         timeout: float | None = None,
     ) -> bytes:
         """Send a request and return the raw bytes of the response body."""
+        self._ensure_ready()
         req = urllib.request.Request(self._url(path), method=method)
         try:
             with urllib.request.urlopen(

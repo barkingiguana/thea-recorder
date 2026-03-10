@@ -16,22 +16,17 @@ package main
 import (
     "context"
     "log"
-    "time"
 
-    "github.com/barkingiguana/thea-recorder/sdks/go/recorder"
+    "github.com/barkingiguana/thea-recorder/sdks/go/thea"
 )
 
 func main() {
-    client := recorder.NewClient("") // reads THEA_URL env, defaults to localhost:9123
+    client := thea.NewClient("") // reads THEA_URL env, defaults to localhost:9123
 
     ctx := context.Background()
 
-    // Wait for the server to be ready.
-    if err := client.WaitUntilReady(ctx, 10*time.Second); err != nil {
-        log.Fatal(err)
-    }
+    // Start the virtual display (auto-waits for server readiness).
 
-    // Start the virtual display.
     if err := client.StartDisplay(ctx); err != nil {
         log.Fatal(err)
     }
@@ -96,14 +91,14 @@ func main() {
 |--------|-------------|
 | `Health(ctx)` | Server health check |
 | `Cleanup(ctx)` | Trigger server-side cleanup |
-| `WaitUntilReady(ctx, timeout)` | Poll `/health` until the server responds |
+| `WaitUntilReady(ctx, timeout)` | Poll `/health` until the server responds. Called automatically on first API call. |
 
 ## Error handling
 
 All methods return errors. HTTP errors are wrapped in `*RecorderError`:
 
 ```go
-var recErr *recorder.RecorderError
+var recErr *thea.RecorderError
 if errors.As(err, &recErr) {
     log.Printf("HTTP %d: %s", recErr.StatusCode, recErr.Body)
 }

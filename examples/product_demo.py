@@ -21,7 +21,6 @@ THEA_URL = os.environ.get("THEA_URL", "http://localhost:9123")
 # ── Connect ───────────────────────────────────────────────────────────────
 
 client = RecorderClient(THEA_URL)
-client.wait_until_ready(timeout=30)
 
 # ── Set up overlay panels ─────────────────────────────────────────────────
 

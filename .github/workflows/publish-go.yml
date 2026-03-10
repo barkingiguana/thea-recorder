@@ -13,5 +13,5 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: sdks/go/go.mod
-      - run: cd sdks/go && go test ./recorder/ -v
-      - run: cd sdks/go && go vet ./recorder/
+      - run: cd sdks/go && go test ./thea/ -v
+      - run: cd sdks/go && go vet ./thea/

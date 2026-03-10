@@ -1264,7 +1264,7 @@ client.<span class="fn">recording</span>(<span class="str">"login_test"</span>) 
 <span class="kw">end</span>
 
 client.download_recording(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div></div>
-                <div class="hero-lang-panel" id="hero-go"><div class="terminal-body">client <span class="op">:=</span> recorder.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
+                <div class="hero-lang-panel" id="hero-go"><div class="terminal-body">client <span class="op">:=</span> thea.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
 client.<span class="fn">StartDisplay</span>(ctx)
 
 stop, _ <span class="op">:=</span> client.<span class="fn">Recording</span>(ctx, <span class="str">"login_test"</span>)
@@ -1554,7 +1554,6 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
                 <div class="code-content"><span class="kw">from</span> <span class="fn">thea</span> <span class="kw">import</span> RecorderClient
 
 client <span class="op">=</span> RecorderClient(<span class="str">"http://localhost:9123"</span>)
-client.wait_until_ready()
 client.start_display()
 
 <span class="kw">with</span> client.recording(<span class="str">"login_test"</span>):
@@ -1568,7 +1567,6 @@ client.download_recording(<span class="str">"login_test"</span>, <span class="st
                 <div class="code-content"><span class="kw">require</span> <span class="str">"recorder"</span>
 
 client <span class="op">=</span> Recorder::Client.new(<span class="str">"http://localhost:9123"</span>)
-client.wait_until_ready
 client.start_display
 
 client.recording(<span class="str">"login_test"</span>) <span class="kw">do</span>
@@ -1579,8 +1577,7 @@ client.download_recording(<span class="str">"login_test"</span>, <span class="st
             </div>
 
             <div class="example-panel" id="sdk-go">
-                <div class="code-content">client <span class="op">:=</span> recorder.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
-client.<span class="fn">WaitUntilReady</span>(ctx, <span class="fn">30</span><span class="op">*</span>time.Second)
+                <div class="code-content">client <span class="op">:=</span> thea.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
 client.<span class="fn">StartDisplay</span>(ctx)
 
 stop, _ <span class="op">:=</span> client.<span class="fn">Recording</span>(ctx, <span class="str">"login_test"</span>)
@@ -1596,7 +1593,6 @@ client.<span class="fn">DownloadRecordingToFile</span>(ctx, <span class="str">"l
 <span class="kw">const</span> client<span class="op">:</span> RecorderClient <span class="op">=</span> <span class="kw">new</span> <span class="fn">RecorderClient</span>({
   url: <span class="str">"http://localhost:9123"</span>,
 });
-<span class="kw">await</span> client.<span class="fn">waitUntilReady</span>();
 <span class="kw">await</span> client.<span class="fn">startDisplay</span>();
 
 <span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () <span class="op">=></span> {
@@ -1610,7 +1606,6 @@ client.<span class="fn">DownloadRecordingToFile</span>(ctx, <span class="str">"l
                 <div class="code-content"><span class="kw">const</span> { RecorderClient } <span class="op">=</span> <span class="fn">require</span>(<span class="str">"thea-recorder"</span>);
 
 <span class="kw">const</span> client <span class="op">=</span> <span class="kw">new</span> <span class="fn">RecorderClient</span>({ url: <span class="str">"http://localhost:9123"</span> });
-<span class="kw">await</span> client.<span class="fn">waitUntilReady</span>();
 <span class="kw">await</span> client.<span class="fn">startDisplay</span>();
 
 <span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () <span class="op">=></span> {
@@ -2002,7 +1997,6 @@ threads <span class="op">=</span> [threading.<span class="fn">Thread</span>(targ
 <div class="terminal-body"><span class="kw">from</span> <span class="fn">thea</span> <span class="kw">import</span> RecorderClient
 
 client <span class="op">=</span> RecorderClient(<span class="str">"http://localhost:9123"</span>)
-client.<span class="fn">wait_until_ready</span>(timeout=<span class="str">30</span>)
 client.<span class="fn">start_display</span>()
 client.<span class="fn">add_panel</span>(<span class="str">"scene"</span>,  title=<span class="str">"Scene"</span>,  width=<span class="str">260</span>)
 client.<span class="fn">add_panel</span>(<span class="str">"action"</span>, title=<span class="str">"Action"</span>)

@@ -104,7 +104,7 @@ try (var out = new FileOutputStream("output.mp4")) {
 
 ```java
 Health health = client.health();
-client.waitUntilReady(Duration.ofSeconds(10));
+client.waitUntilReady(Duration.ofSeconds(10));  // called automatically on first API call
 client.cleanup();
 ```
 

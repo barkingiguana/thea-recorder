@@ -105,7 +105,7 @@ client = RecorderClient(<span class="str">"http://localhost:9123"</span>)
             </div>
 
             <div class="lang-panel" id="panel-go">
-<pre><code>client := recorder.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
+<pre><code>client := thea.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
 result, _ := client.<span class="fn">Recording</span>(ctx, <span class="str">"login_test"</span>, <span class="kw">func</span>() error {
     <span class="cm">// your test code here</span>
     <span class="kw">return</span> <span class="val">nil</span>

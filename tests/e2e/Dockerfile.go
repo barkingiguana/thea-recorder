@@ -2,7 +2,7 @@ FROM golang:1.21-alpine
 
 WORKDIR /app
 COPY sdks/go/go.mod .
-COPY sdks/go/recorder/ recorder/
+COPY sdks/go/thea/ thea/
 
 # Create a cmd directory for the e2e test
 RUN mkdir -p cmd/e2e

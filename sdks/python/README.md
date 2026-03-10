@@ -21,10 +21,7 @@ from thea import RecorderClient
 
 client = RecorderClient("http://localhost:8080")
 
-# Wait for the server to be ready
-client.wait_until_ready(timeout=10)
-
-# Start the virtual display
+# Start the virtual display (auto-waits for server readiness)
 client.start_display()
 
 # Record a session
@@ -78,7 +75,7 @@ client.download_recording("my-demo", "/tmp/my-demo.mp4")
 
 - `health()` — Server health check.
 - `cleanup()` — Remove temporary resources.
-- `wait_until_ready(timeout=30, interval=0.5)` — Poll `/health` until the server is reachable.
+- `wait_until_ready(timeout=30, interval=0.5)` — Poll `/health` until the server is reachable. Called automatically on first API call.
 
 ### Context managers
 

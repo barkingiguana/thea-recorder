@@ -1,4 +1,4 @@
-package recorder_test
+package thea_test
 
 import (
 	"context"
@@ -7,19 +7,19 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/barkingiguana/thea-recorder/sdks/go/recorder"
+	"github.com/barkingiguana/thea-recorder/sdks/go/thea"
 )
 
 // ExampleNewClient demonstrates creating a client with the default URL.
 func ExampleNewClient() {
-	client := recorder.NewClient("http://localhost:9123")
+	client := thea.NewClient("http://localhost:9123")
 	fmt.Println(client.BaseURL())
 	// Output: http://localhost:9123
 }
 
 // ExampleClient_SetTimeout demonstrates configuring the HTTP timeout.
 func ExampleClient_SetTimeout() {
-	client := recorder.NewClient("http://localhost:9123")
+	client := thea.NewClient("http://localhost:9123")
 	client.SetTimeout(60 * time.Second)
 	fmt.Println("timeout configured")
 	// Output: timeout configured
@@ -33,7 +33,7 @@ func ExampleClient_WaitUntilReady() {
 	ts := fakeServer()
 	defer ts.Close()
 
-	client := recorder.NewClient(ts.URL)
+	client := thea.NewClient(ts.URL)
 	err := client.WaitUntilReady(context.Background(), 2*time.Second)
 	if err != nil {
 		fmt.Println("error:", err)
@@ -48,7 +48,7 @@ func ExampleClient_Health() {
 	ts := fakeServer()
 	defer ts.Close()
 
-	client := recorder.NewClient(ts.URL)
+	client := thea.NewClient(ts.URL)
 	h, err := client.Health(context.Background())
 	if err != nil {
 		fmt.Println("error:", err)
@@ -63,7 +63,7 @@ func ExampleClient_Recording() {
 	ts := fakeServer()
 	defer ts.Close()
 
-	client := recorder.NewClient(ts.URL)
+	client := thea.NewClient(ts.URL)
 	ctx := context.Background()
 
 	stop, err := client.Recording(ctx, "my-session")
@@ -86,7 +86,7 @@ func ExampleClient_WithPanel() {
 	ts := fakeServer()
 	defer ts.Close()
 
-	client := recorder.NewClient(ts.URL)
+	client := thea.NewClient(ts.URL)
 	ctx := context.Background()
 
 	err := client.WithPanel(ctx, "code", "Code Panel", 80, func() error {
@@ -111,15 +111,18 @@ func ExampleClient_WithPanel() {
 
 // ExampleRecorderError shows how to inspect HTTP errors.
 func ExampleRecorderError() {
-	// Create a server that always returns 500.
+	// Create a server that returns 200 for /health but 500 for everything else.
 	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"status":"ok"}`)
+	})
 	mux.HandleFunc("/display/start", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	})
 	ts := httptest.NewServer(mux)
 	defer ts.Close()
 
-	client := recorder.NewClient(ts.URL)
+	client := thea.NewClient(ts.URL)
 	err := client.StartDisplay(context.Background())
 	if err != nil {
 		fmt.Println("got error:", err != nil)

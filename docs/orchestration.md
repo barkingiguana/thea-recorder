@@ -13,7 +13,6 @@ server and annotate what's happening in the overlay panels:
 from thea import RecorderClient
 
 client = RecorderClient("http://localhost:9123")
-client.wait_until_ready(timeout=30)
 client.start_display()
 client.add_panel("scene",  title="Scene",  width=260)
 client.add_panel("action", title="Action")
@@ -207,7 +206,6 @@ def recorder(worker_id):
     # worker_id is "gw0", "gw1", … or "master"
     session_name = worker_id if worker_id != "master" else "gw0"
     client = RecorderClient("http://localhost:9123")
-    client.wait_until_ready(timeout=30)
     client.create_session(session_name)
     client.use_session(session_name)
     client.start_display()

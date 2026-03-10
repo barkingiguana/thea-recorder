@@ -25,10 +25,7 @@ client = Recorder::Client.new("http://localhost:3000")
 # Or rely on THEA_URL env var:
 # client = Recorder::Client.new
 
-# Wait for the server to be reachable
-client.wait_until_ready(timeout: 30)
-
-# Start the virtual display
+# Start the virtual display (auto-waits for server readiness)
 client.start_display
 
 # Add a panel
@@ -102,7 +99,7 @@ client = Recorder::Client.new("http://localhost:3000", timeout: 60)
 | `recording_info(name)` | GET /recordings/{name}/info | Get recording metadata |
 | `health` | GET /health | Health check |
 | `cleanup` | POST /cleanup | Clean up resources |
-| `wait_until_ready(timeout:)` | GET /health (polling) | Wait for server |
+| `wait_until_ready(timeout:)` | GET /health (polling) | Wait for server. Called automatically on first API call. |
 | `recording(name) { \|r\| ... }` | -- | Block with auto stop |
 | `with_panel(name, ...) { ... }` | -- | Block with auto remove |
 

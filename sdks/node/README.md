@@ -22,10 +22,7 @@ const client = new RecorderClient({
   url: "http://localhost:9123", // or set THEA_URL env var
 });
 
-// Wait for server to be ready
-await client.waitUntilReady(10_000);
-
-// Start display and record
+// Start display and record (auto-waits for server readiness)
 await client.startDisplay();
 
 const result = await client.recording("my-demo", async () => {
@@ -88,6 +85,7 @@ new RecorderClient(options?: {
 |--------|-------------|
 | `health()` | Health check |
 | `cleanup()` | Clean up resources |
+| `waitUntilReady(timeoutMs)` | Poll `/health` until the server responds. Called automatically on first API call. |
 
 ### Helpers
 
@@ -102,7 +100,7 @@ await client.withPanel("code", "Source Code", 80, async () => {
   await client.updatePanel("code", { text: "..." });
 });
 
-// Wait for server readiness with timeout
+// Explicit server readiness check (called automatically on first API call)
 await client.waitUntilReady(10_000);
 ```
 

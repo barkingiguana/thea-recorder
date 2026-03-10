@@ -51,22 +51,20 @@ package e2e
 import (
     "context"
     "fmt"
-    "time"
 
     "github.com/cucumber/godog"
-    recorder "github.com/barkingiguana/thea-recorder/sdks/go/recorder"
+    "github.com/barkingiguana/thea-recorder/sdks/go/thea"
 )
 
 var (
-    client     *recorder.Client
+    client     *thea.Client
     stepEvents []StepEvent
 )
 
 func InitializeTestSuite(ctx *godog.TestSuiteContext) {
     ctx.BeforeSuite(func() {
-        client = recorder.NewClient("http://localhost:9123")
+        client = thea.NewClient("http://localhost:9123")
         c := context.Background()
-        client.WaitUntilReady(c, 30*time.Second)
         client.StartDisplay(c)
         client.AddPanel(c, "status", "Status", intPtr(120))
         client.AddPanel(c, "scenario", "Scenario", nil)
@@ -120,7 +118,6 @@ from thea import RecorderClient
 client = RecorderClient(os.environ.get("THEA_URL", "http://localhost:9123"))
 
 def before_all(context):
-    client.wait_until_ready(timeout=30)
     client.start_display()
     client.add_panel("status", title="Status", width=120)
     client.add_panel("scenario", title="Scenario")
@@ -170,7 +167,6 @@ from thea import RecorderClient
 @pytest.fixture(scope="session")
 def recorder():
     client = RecorderClient("http://localhost:9123")
-    client.wait_until_ready(timeout=30)
     client.start_display()
     client.add_panel("status", title="Status", width=120)
     yield client
@@ -191,7 +187,6 @@ def record_test(request, recorder):
 require "recorder"
 
 $recorder = Recorder::Client.new(ENV.fetch("THEA_URL", "http://localhost:9123"))
-$recorder.wait_until_ready(timeout: 30)
 $recorder.start_display
 $recorder.add_panel("status", title: "Status", width: 120)
 $recorder.add_panel("scenario", title: "Scenario")
@@ -227,7 +222,6 @@ import { RecorderClient } from "thea-recorder";
 const client = new RecorderClient("http://localhost:9123");
 
 export default async function globalSetup() {
-  await client.waitUntilReady(30_000);
   await client.startDisplay();
   await client.addPanel("status", "Status", 120);
 }
@@ -277,7 +271,6 @@ public class E2EExtension implements BeforeAllCallback, AfterAllCallback,
     @Override
     public void beforeAll(ExtensionContext ctx) throws Exception {
         client = new RecorderClient("http://localhost:9123");
-        client.waitUntilReady(java.time.Duration.ofSeconds(30));
         client.startDisplay();
         client.addPanel("status", "Status", 120);
         client.addPanel("scenario", "Scenario", null);
@@ -315,7 +308,7 @@ class LoginTest {
 
 ## Tips
 
-- **Always call `wait_until_ready()`** in your setup hook. The server may take a moment to start, especially in Docker.
+- **Auto-ready is built in** — the SDK automatically waits for the server on the first API call, so you don't need to call `wait_until_ready()` yourself. The method still exists if you want explicit control.
 - **Use the `recording()` helper** instead of manual start/stop — it handles cleanup on test failure.
 - **Update panels in step hooks** for the best video debugging experience.
 - **Set `--shm-size=2g`** or higher in Docker — Chrome and Xvfb need shared memory.

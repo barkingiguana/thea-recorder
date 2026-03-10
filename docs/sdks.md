@@ -9,7 +9,7 @@ Every SDK follows the same pattern — connect, record, done:
 ### Go
 
 ```go
-client := recorder.NewClient("http://localhost:9123")
+client := thea.NewClient("http://localhost:9123")
 result, _ := client.Recording(ctx, "login_test", func() error {
     // ... your test code ...
     return nil
@@ -101,7 +101,7 @@ Every SDK provides scoped helpers that handle start/stop automatically:
 |---|---|
 | `recording(name)` | Start recording, run code, stop recording (even on error) |
 | `with_panel(name, ...)` | Add panel, run code, remove panel |
-| `wait_until_ready(timeout)` | Poll `/health` until server responds |
+| `wait_until_ready(timeout)` | Poll `/health` until server responds. Called automatically on first API call. |
 
 ## Configuration
 

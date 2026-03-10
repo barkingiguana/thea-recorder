@@ -1,4 +1,4 @@
-package recorder_test
+package thea_test
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/barkingiguana/thea-recorder/sdks/go/recorder"
+	"github.com/barkingiguana/thea-recorder/sdks/go/thea"
 )
 
 // ---------------------------------------------------------------------------
@@ -42,7 +42,7 @@ func fakeServer() *httptest.Server {
 	})
 
 	// Panels
-	var panels []recorder.Panel
+	var panels []thea.Panel
 	var mu sync.Mutex
 
 	mux.HandleFunc("/panels", func(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +52,7 @@ func fakeServer() *httptest.Server {
 		case http.MethodGet:
 			json.NewEncoder(w).Encode(panels)
 		case http.MethodPost:
-			var p recorder.Panel
+			var p thea.Panel
 			json.NewDecoder(r.Body).Decode(&p)
 			panels = append(panels, p)
 			w.WriteHeader(http.StatusCreated)
@@ -118,7 +118,7 @@ func fakeServer() *httptest.Server {
 		}
 		recording.Store(false)
 		name := recName.Load().(string)
-		json.NewEncoder(w).Encode(recorder.RecordingResult{
+		json.NewEncoder(w).Encode(thea.RecordingResult{
 			Path:    "/recordings/" + name + ".mp4",
 			Elapsed: 5.2,
 			Name:    name,
@@ -128,7 +128,7 @@ func fakeServer() *httptest.Server {
 		json.NewEncoder(w).Encode(map[string]float64{"elapsed": 3.7})
 	})
 	mux.HandleFunc("/recording/status", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(recorder.RecordingStatus{
+		json.NewEncoder(w).Encode(thea.RecordingStatus{
 			Recording: recording.Load(),
 			Name:      recName.Load().(string),
 			Elapsed:   3.7,
@@ -142,7 +142,7 @@ func fakeServer() *httptest.Server {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
-		json.NewEncoder(w).Encode([]recorder.RecordingInfo{
+		json.NewEncoder(w).Encode([]thea.RecordingInfo{
 			{Name: "demo", Path: "/recordings/demo.mp4", Size: 1024, Created: "2025-01-01T00:00:00Z"},
 		})
 	})
@@ -150,7 +150,7 @@ func fakeServer() *httptest.Server {
 		rest := strings.TrimPrefix(r.URL.Path, "/recordings/")
 		if strings.HasSuffix(rest, "/info") {
 			name := strings.TrimSuffix(rest, "/info")
-			json.NewEncoder(w).Encode(recorder.RecordingInfo{
+			json.NewEncoder(w).Encode(thea.RecordingInfo{
 				Name: name, Path: "/recordings/" + name + ".mp4", Size: 1024, Created: "2025-01-01T00:00:00Z",
 			})
 			return
@@ -162,7 +162,7 @@ func fakeServer() *httptest.Server {
 
 	// Health
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(recorder.Health{
+		json.NewEncoder(w).Encode(thea.Health{
 			Status: "ok", Recording: false, Display: ":99", Panels: []string{}, Uptime: 42.5,
 		})
 	})
@@ -179,8 +179,8 @@ func fakeServer() *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
-func newTestClient(ts *httptest.Server) *recorder.Client {
-	return recorder.NewClient(ts.URL)
+func newTestClient(ts *httptest.Server) *thea.Client {
+	return thea.NewClient(ts.URL)
 }
 
 // ---------------------------------------------------------------------------
@@ -470,7 +470,7 @@ func TestWaitUntilReadyTimeout(t *testing.T) {
 		http.Error(w, "not ready", http.StatusServiceUnavailable)
 	}))
 	defer ts.Close()
-	c := recorder.NewClient(ts.URL)
+	c := thea.NewClient(ts.URL)
 
 	err := c.WaitUntilReady(context.Background(), 500*time.Millisecond)
 	if err == nil {
@@ -486,17 +486,22 @@ func TestWaitUntilReadyTimeout(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestRecorderError(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"something broke"}`, http.StatusInternalServerError)
-	}))
+	})
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
-	c := recorder.NewClient(ts.URL)
+	c := thea.NewClient(ts.URL)
 
 	err := c.StartDisplay(context.Background())
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	var recErr *recorder.RecorderError
+	var recErr *thea.RecorderError
 	if !errAs(err, &recErr) {
 		t.Fatalf("expected RecorderError, got %T: %v", err, err)
 	}
@@ -506,11 +511,16 @@ func TestRecorderError(t *testing.T) {
 }
 
 func TestContextCancellation(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(5 * time.Second)
-	}))
+	})
+	ts := httptest.NewServer(mux)
 	defer ts.Close()
-	c := recorder.NewClient(ts.URL)
+	c := thea.NewClient(ts.URL)
 	c.SetTimeout(10 * time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
@@ -526,7 +536,7 @@ func TestNewClientEnvFallback(t *testing.T) {
 	os.Setenv("THEA_URL", "http://env-host:9999")
 	defer os.Unsetenv("THEA_URL")
 
-	c := recorder.NewClient("")
+	c := thea.NewClient("")
 	if c.BaseURL() != "http://env-host:9999" {
 		t.Fatalf("expected env URL, got %q", c.BaseURL())
 	}
@@ -534,7 +544,7 @@ func TestNewClientEnvFallback(t *testing.T) {
 
 func TestNewClientDefault(t *testing.T) {
 	os.Unsetenv("THEA_URL")
-	c := recorder.NewClient("")
+	c := thea.NewClient("")
 	if c.BaseURL() != "http://localhost:9123" {
 		t.Fatalf("expected default URL, got %q", c.BaseURL())
 	}
@@ -589,8 +599,8 @@ func TestConcurrentPanels(t *testing.T) {
 
 // errAs is a helper to avoid importing errors package in test.
 func errAs(err error, target any) bool {
-	if e, ok := err.(*recorder.RecorderError); ok {
-		if p, ok2 := target.(**recorder.RecorderError); ok2 {
+	if e, ok := err.(*thea.RecorderError); ok {
+		if p, ok2 := target.(**thea.RecorderError); ok2 {
 			*p = e
 			return true
 		}

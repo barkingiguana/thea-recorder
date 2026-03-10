@@ -101,6 +101,7 @@ const DEFAULT_TIMEOUT = 30_000;
 export class RecorderClient {
   private readonly baseUrl: string;
   private readonly timeout: number;
+  private readyPromise: Promise<void> | null = null;
 
   constructor(options?: RecorderClientOptions) {
     const envUrl =
@@ -112,6 +113,13 @@ export class RecorderClient {
   // -----------------------------------------------------------------------
   // Internal helpers
   // -----------------------------------------------------------------------
+
+  private async ensureReady(): Promise<void> {
+    if (!this.readyPromise) {
+      this.readyPromise = this.waitUntilReady();
+    }
+    return this.readyPromise;
+  }
 
   private async request<T = unknown>(
     method: string,
@@ -131,6 +139,9 @@ export class RecorderClient {
     body?: unknown,
     raw?: boolean,
   ): Promise<T | Response> {
+    if (path !== "/health") {
+      await this.ensureReady();
+    }
     const url = `${this.baseUrl}${path}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeout);

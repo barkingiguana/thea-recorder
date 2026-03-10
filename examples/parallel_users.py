@@ -74,9 +74,6 @@ def user_session(user_id: int):
 
 USER_IDS = [1, 2, 3]
 
-# Wait for the server to be ready before spawning threads
-RecorderClient(THEA_URL).wait_until_ready(timeout=30)
-
 threads = [
     threading.Thread(target=user_session, args=(uid,), name=f"user-{uid}")
     for uid in USER_IDS

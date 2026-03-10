@@ -36,6 +36,7 @@ public class RecorderClient implements AutoCloseable {
     private final String baseUrl;
     private final HttpClient httpClient;
     private final Duration timeout;
+    private volatile boolean ready;
 
     /**
      * Creates a client using the THEA_URL environment variable.
@@ -233,6 +234,7 @@ public class RecorderClient implements AutoCloseable {
      * @param dest destination path
      */
     public void downloadRecording(String name, Path dest) {
+        ensureReady("/recordings/" + encode(name));
         var request = newRequest("/recordings/" + encode(name))
                 .GET()
                 .build();
@@ -256,6 +258,7 @@ public class RecorderClient implements AutoCloseable {
      * @param out  output stream to write to
      */
     public void downloadRecording(String name, OutputStream out) {
+        ensureReady("/recordings/" + encode(name));
         var request = newRequest("/recordings/" + encode(name))
                 .GET()
                 .build();
@@ -371,7 +374,14 @@ public class RecorderClient implements AutoCloseable {
         send(request, expectedStatus);
     }
 
+    private synchronized void ensureReady(String path) {
+        if (ready || path.equals("/health")) return;
+        waitUntilReady(Duration.ofSeconds(30));
+        ready = true;
+    }
+
     private String send(HttpRequest request, int expectedStatus) {
+        ensureReady(request.uri().getPath());
         try {
             var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != expectedStatus) {
@@ -397,7 +407,7 @@ public class RecorderClient implements AutoCloseable {
     private static String envUrl() {
         var url = System.getenv("THEA_URL");
         if (url == null || url.isBlank()) {
-            throw new RecorderError("THEA_URL environment variable is not set");
+            return "http://localhost:9123";
         }
         return url;
     }

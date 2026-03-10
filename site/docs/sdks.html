@@ -91,7 +91,6 @@ print(result.path)</code><span class="lang-label">python</span></pre>
 @pytest.fixture(scope=<span class="str">"session"</span>)
 <span class="kw">def</span> <span class="fn">recorder</span>():
     client = RecorderClient(<span class="str">"http://localhost:9123"</span>)
-    client.wait_until_ready(timeout=30)
     client.start_display()
     client.add_panel(<span class="str">"status"</span>, title=<span class="str">"Status"</span>, width=120)
     <span class="kw">yield</span> client
@@ -111,7 +110,6 @@ print(result.path)</code><span class="lang-label">python</span></pre>
 client = RecorderClient(<span class="str">"http://localhost:9123"</span>)
 
 <span class="kw">def</span> <span class="fn">before_all</span>(context):
-    client.wait_until_ready(timeout=30)
     client.start_display()
     client.add_panel(<span class="str">"status"</span>, title=<span class="str">"Status"</span>, width=120)
     client.add_panel(<span class="str">"scenario"</span>, title=<span class="str">"Scenario"</span>)
@@ -134,7 +132,7 @@ client = RecorderClient(<span class="str">"http://localhost:9123"</span>)
 <pre><code><span class="cmd">go get</span> github.com/barkingiguana/thea-recorder/sdks/go</code><span class="lang-label">bash</span></pre>
 
     <h4>Quick start</h4>
-<pre><code>client := recorder.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
+<pre><code>client := thea.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
 result, _ := client.<span class="fn">Recording</span>(ctx, <span class="str">"login_test"</span>, <span class="kw">func</span>() error {
     <span class="cm">// your test code here</span>
     <span class="kw">return</span> <span class="val">nil</span>
@@ -144,9 +142,8 @@ fmt.<span class="fn">Println</span>(result.Path)</code><span class="lang-label">
     <h4>godog integration</h4>
 <pre><code><span class="kw">func</span> <span class="fn">InitializeTestSuite</span>(ctx *godog.TestSuiteContext) {
     ctx.<span class="fn">BeforeSuite</span>(<span class="kw">func</span>() {
-        client = recorder.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
+        client = thea.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
         c := context.<span class="fn">Background</span>()
-        client.<span class="fn">WaitUntilReady</span>(c, 30*time.Second)
         client.<span class="fn">StartDisplay</span>(c)
         client.<span class="fn">AddPanel</span>(c, <span class="str">"status"</span>, <span class="str">"Status"</span>, <span class="fn">intPtr</span>(120))
     })
@@ -190,7 +187,6 @@ client.recording(<span class="str">"login_test"</span>) <span class="kw">do</spa
 $recorder = Recorder::Client.new(
   ENV.fetch(<span class="str">"THEA_URL"</span>, <span class="str">"http://localhost:9123"</span>)
 )
-$recorder.wait_until_ready(timeout: 30)
 $recorder.start_display
 $recorder.add_panel(<span class="str">"status"</span>, title: <span class="str">"Status"</span>, width: 120)
 
@@ -322,7 +318,7 @@ test(<span class="str">"login flow"</span>, <span class="kw">async</span> ({ pag
         <tbody>
             <tr><td><code>recording(name)</code></td><td>Start recording, run code, stop recording (even on error)</td></tr>
             <tr><td><code>with_panel(name, ...)</code></td><td>Add panel, run code, remove panel</td></tr>
-            <tr><td><code>wait_until_ready(timeout)</code></td><td>Poll <code>/health</code> until server responds</td></tr>
+            <tr><td><code>wait_until_ready(timeout)</code></td><td>Poll <code>/health</code> until server responds. Called automatically on first API call.</td></tr>
         </tbody>
     </table>
 

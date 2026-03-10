@@ -56,7 +56,9 @@ def _http_error(
 
 @pytest.fixture()
 def client() -> RecorderClient:
-    return RecorderClient("http://localhost:8080")
+    c = RecorderClient("http://localhost:8080")
+    c._ready = True  # bypass auto-ready in unit tests
+    return c
 
 
 # ---------------------------------------------------------------------------
@@ -411,10 +413,10 @@ class TestRecordingContextManager:
             _mock_response({"name": "demo"}, 201),
             _mock_response({"path": "/demo.mp4", "elapsed": 5.0, "name": "demo"}),
         ]
-        with client.recording("demo") as info:
-            assert info["name"] == "demo"
+        with client.recording("demo") as result:
+            assert result.name == "demo"
 
-        assert info["_stop"]["elapsed"] == 5.0
+        assert result.elapsed == 5.0
 
     @mock.patch("urllib.request.urlopen")
     def test_stops_on_exception(
@@ -425,7 +427,7 @@ class TestRecordingContextManager:
             _mock_response({"path": "/err.mp4", "elapsed": 1.0, "name": "err"}),
         ]
         with pytest.raises(ValueError, match="boom"):
-            with client.recording("err") as info:
+            with client.recording("err") as result:
                 raise ValueError("boom")
 
         # stop_recording must have been called despite exception

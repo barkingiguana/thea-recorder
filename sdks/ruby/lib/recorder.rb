@@ -16,6 +16,7 @@ module Recorder
       @base_url = (url || ENV["THEA_URL"] || "http://localhost:9123").chomp("/")
       @timeout = timeout
       @uri = URI.parse(@base_url)
+      @ready = false
     end
 
     # Display
@@ -160,6 +161,7 @@ module Recorder
     end
 
     def raw_get(path)
+      ensure_ready(path)
       request = Net::HTTP::Get.new(path)
       response = connection.request(request)
       unless response.is_a?(Net::HTTPSuccess)
@@ -171,7 +173,14 @@ module Recorder
       raise Error, "Connection failed: #{e.message}"
     end
 
+    def ensure_ready(path)
+      return if @ready || path == "/health"
+      wait_until_ready
+      @ready = true
+    end
+
     def execute(request)
+      ensure_ready(request.path)
       response = connection.request(request)
       unless response.is_a?(Net::HTTPSuccess)
         raise Error, "HTTP #{response.code}: #{response.body}"
