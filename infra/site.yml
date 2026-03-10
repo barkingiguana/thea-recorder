@@ -4,14 +4,23 @@ Description: Static site infrastructure for thea-recorder
 Parameters:
   DomainName:
     Type: String
-    Description: Fully qualified domain name (e.g. recorder.example.com)
+    Description: >
+      Fully qualified domain name (e.g. thearecorder.com).
+      Leave empty to use the CloudFront domain name only (useful before you own the domain).
+    Default: ""
   HostedZoneId:
-    Type: AWS::Route53::HostedZone::Id
-    Description: Route53 hosted zone ID
+    Type: String
+    Description: >
+      Route53 hosted zone ID. Required only when DomainName is set.
+    Default: ""
+
+Conditions:
+  HasDomain: !Not [!Equals [!Ref DomainName, ""]]
 
 Resources:
   Certificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: HasDomain
     Properties:
       DomainName: !Ref DomainName
       ValidationMethod: DNS
@@ -64,12 +73,16 @@ Resources:
       DistributionConfig:
         Enabled: true
         DefaultRootObject: index.html
-        Aliases:
-          - !Ref DomainName
-        ViewerCertificate:
-          AcmCertificateArn: !Ref Certificate
-          SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1.2_2021
+        Aliases: !If
+          - HasDomain
+          - [!Ref DomainName]
+          - !Ref AWS::NoValue
+        ViewerCertificate: !If
+          - HasDomain
+          - AcmCertificateArn: !Ref Certificate
+            SslSupportMethod: sni-only
+            MinimumProtocolVersion: TLSv1.2_2021
+          - CloudFrontDefaultCertificate: true
         DefaultCacheBehavior:
           TargetOriginId: s3-origin
           ViewerProtocolPolicy: redirect-to-https
@@ -85,6 +98,7 @@ Resources:
 
   DNSRecord:
     Type: AWS::Route53::RecordSet
+    Condition: HasDomain
     Properties:
       HostedZoneId: !Ref HostedZoneId
       Name: !Ref DomainName
@@ -95,6 +109,9 @@ Resources:
 
 Outputs:
   CloudFrontDomainName:
+    Description: Use this URL until you have your custom domain set up
     Value: !GetAtt Distribution.DomainName
   S3BucketName:
     Value: !Ref SiteBucket
+  DistributionId:
+    Value: !Ref Distribution
