@@ -1302,14 +1302,14 @@ recorder start-recording <span class="op">--name</span> login_test
 recorder stop-recording
 recorder download <span class="op">--name</span> login_test <span class="op">-o</span> login_test.mp4</div></div>
                 <div class="hero-lang-panel" id="hero-curl"><div class="terminal-body"><span class="cm"># start display and record</span>
-curl <span class="op">-X</span> POST localhost:9123/display/start
-curl <span class="op">-X</span> POST localhost:9123/recording/start \
+curl <span class="op">-X</span> POST http://localhost:9123/display/start
+curl <span class="op">-X</span> POST http://localhost:9123/recording/start \
   <span class="op">-H</span> <span class="str">"Content-Type: application/json"</span> \
   <span class="op">-d</span> <span class="str">'{"name": "login_test"}'</span>
 
 <span class="cm"># run your test, then stop and download</span>
-curl <span class="op">-X</span> POST localhost:9123/recording/stop
-curl <span class="op">-o</span> login_test.mp4 localhost:9123/recordings/login_test</div></div>
+curl <span class="op">-X</span> POST http://localhost:9123/recording/stop
+curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/login_test</div></div>
             </div>
         </div>
     </div>
@@ -1634,14 +1634,14 @@ recorder download <span class="op">--name</span> login_test <span class="op">-o<
 
             <div class="example-panel" id="sdk-curl">
                 <div class="code-content"><span class="cm"># start display and record</span>
-curl <span class="op">-X</span> POST localhost:9123/display/start
-curl <span class="op">-X</span> POST localhost:9123/recording/start \
+curl <span class="op">-X</span> POST http://localhost:9123/display/start
+curl <span class="op">-X</span> POST http://localhost:9123/recording/start \
   <span class="op">-H</span> <span class="str">"Content-Type: application/json"</span> \
   <span class="op">-d</span> <span class="str">'{"name": "login_test"}'</span>
 
 <span class="cm"># run your test, then stop and download</span>
-curl <span class="op">-X</span> POST localhost:9123/recording/stop
-curl <span class="op">-o</span> login_test.mp4 localhost:9123/recordings/login_test</div>
+curl <span class="op">-X</span> POST http://localhost:9123/recording/stop
+curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/login_test</div>
             </div>
         </div>
     </div>
@@ -2026,27 +2026,27 @@ client.<span class="fn">cleanup</span>()</div>
 
             <div class="example-panel" id="parallel-curl">
 <div class="terminal-body"><span class="cm"># Create two independent sessions</span>
-curl -X POST localhost:9123/sessions -d <span class="str">'{"name":"alice"}'</span>
+curl -X POST http://localhost:9123/sessions -d <span class="str">'{"name":"alice"}'</span>
 <span class="cm"># → {"name":"alice","display":100,"url_prefix":"/sessions/alice"}</span>
 
-curl -X POST localhost:9123/sessions -d <span class="str">'{"name":"bob"}'</span>
+curl -X POST http://localhost:9123/sessions -d <span class="str">'{"name":"bob"}'</span>
 <span class="cm"># → {"name":"bob","display":101,"url_prefix":"/sessions/bob"}</span>
 
 <span class="cm"># Each session has its own Xvfb, panels, and recording</span>
-curl -X POST localhost:9123/sessions/alice/display/start
-curl -X POST localhost:9123/sessions/bob/display/start
+curl -X POST http://localhost:9123/sessions/alice/display/start
+curl -X POST http://localhost:9123/sessions/bob/display/start
 
-curl -X POST localhost:9123/sessions/alice/recording/start \
+curl -X POST http://localhost:9123/sessions/alice/recording/start \
   -d <span class="str">'{"name":"alice_checkout"}'</span>
-curl -X POST localhost:9123/sessions/bob/recording/start \
+curl -X POST http://localhost:9123/sessions/bob/recording/start \
   -d <span class="str">'{"name":"bob_checkout"}'</span>
 
 <span class="cm"># … both browsers record independently …</span>
 
-curl -X POST localhost:9123/sessions/alice/recording/stop
-curl -X POST localhost:9123/sessions/bob/recording/stop
-curl -X DELETE localhost:9123/sessions/alice
-curl -X DELETE localhost:9123/sessions/bob</div>
+curl -X POST http://localhost:9123/sessions/alice/recording/stop
+curl -X POST http://localhost:9123/sessions/bob/recording/stop
+curl -X DELETE http://localhost:9123/sessions/alice
+curl -X DELETE http://localhost:9123/sessions/bob</div>
             </div>
         </div>
     </div>
