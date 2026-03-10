@@ -12,7 +12,7 @@ Resources:
     Properties:
       Name: !Ref DomainName
 
-  # SES inbound email
+  # DeliveryMachine inbound email
   MXRecord:
     Type: AWS::Route53::RecordSet
     Properties:
@@ -21,7 +21,18 @@ Resources:
       Type: MX
       TTL: 300
       ResourceRecords:
-        - "10 inbound-smtp.us-east-1.amazonaws.com"
+        - "10 mx.deliverymachine.net"
+
+  # DeliveryMachine domain verification
+  DMVerifyRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub "_dm-verify.${DomainName}"
+      Type: TXT
+      TTL: 300
+      ResourceRecords:
+        - '"dm-verify=wXi7uNukcrvEmPq2sD7ifAS_yfh_0ALvqiSJxvIQyVw"'
 
   # SES domain verification
   SESTxtRecord:
