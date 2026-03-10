@@ -55,6 +55,11 @@ Resources:
                   - cloudformation:DescribeStackEvents
                   - cloudformation:GetTemplate
                   - cloudformation:ValidateTemplate
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:ListChangeSets
                 Resource:
                   - !Sub "arn:aws:cloudformation:us-east-1:${AWS::AccountId}:stack/${GitHubRepo}-*"
 
