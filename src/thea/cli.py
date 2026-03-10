@@ -22,16 +22,7 @@ import sys
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
-try:
-    import click
-except ImportError:
-    import sys as _sys
-    print(
-        "Error: the thea CLI requires the [server] extra.\n"
-        "Install it with: pip install thea-recorder[server]",
-        file=_sys.stderr,
-    )
-    _sys.exit(1)
+import click
 
 
 def _server_url(ctx: click.Context) -> str:
