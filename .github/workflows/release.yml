@@ -18,6 +18,9 @@ jobs:
       should_release: ${{ steps.bump.outputs.should_release }}
       next_version: ${{ steps.bump.outputs.next_version }}
       bump_type: ${{ steps.bump.outputs.bump_type }}
+      python_changed: ${{ steps.changes.outputs.python }}
+      go_changed: ${{ steps.changes.outputs.go }}
+      changelog: ${{ steps.changelog.outputs.text }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -74,7 +77,73 @@ jobs:
           echo "should_release=true" >> "$GITHUB_OUTPUT"
           echo "next_version=$NEXT" >> "$GITHUB_OUTPUT"
           echo "bump_type=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
           echo "Bump: $BUMP ($CURRENT -> $NEXT)"
+
+      - name: Detect changed packages
+        id: changes
+        if: steps.bump.outputs.should_release == 'true'
+        run: |
+          LAST_TAG="${{ steps.bump.outputs.last_tag }}"
+          CHANGED="$(git diff --name-only "$LAST_TAG"..HEAD)"
+
+          # Python: core package or SDK
+          if echo "$CHANGED" | grep -qE '^(src/thea/|pyproject\.toml|sdks/python/)'; then
+            echo "python=true" >> "$GITHUB_OUTPUT"
+            echo "Python package changed"
+          else
+            echo "python=false" >> "$GITHUB_OUTPUT"
+            echo "Python package unchanged — will skip publish"
+          fi
+
+          # Go SDK
+          if echo "$CHANGED" | grep -qE '^sdks/go/'; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+            echo "Go SDK changed"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            echo "Go SDK unchanged — will skip publish"
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        if: steps.bump.outputs.should_release == 'true'
+        run: |
+          LAST_TAG="${{ steps.bump.outputs.last_tag }}"
+          VER="${{ steps.bump.outputs.next_version }}"
+
+          # Categorise commits
+          BREAKING=""
+          FEATURES=""
+          FIXES=""
+          OTHER=""
+
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            # Skip chore: bump commits
+            echo "$line" | grep -q "^chore: bump" && continue
+
+            if echo "$line" | grep -qiE '^[a-z]+(\(.+\))?!:|BREAKING[ -]CHANGE'; then
+              BREAKING="${BREAKING}- ${line}\n"
+            elif echo "$line" | grep -qE '^feat(\(.+\))?:'; then
+              FEATURES="${FEATURES}- ${line}\n"
+            elif echo "$line" | grep -qE '^fix(\(.+\))?:'; then
+              FIXES="${FIXES}- ${line}\n"
+            else
+              OTHER="${OTHER}- ${line}\n"
+            fi
+          done <<< "$(git log "${LAST_TAG}..HEAD" --pretty=format:"%s")"
+
+          NOTES=""
+          [ -n "$BREAKING" ] && NOTES="${NOTES}### Breaking Changes\n${BREAKING}\n"
+          [ -n "$FEATURES" ] && NOTES="${NOTES}### Features\n${FEATURES}\n"
+          [ -n "$FIXES" ] && NOTES="${NOTES}### Fixes\n${FIXES}\n"
+          [ -n "$OTHER" ] && NOTES="${NOTES}### Other\n${OTHER}\n"
+
+          # Output for GitHub release and CHANGELOG.md
+          echo "text<<EOFCHANGELOG" >> "$GITHUB_OUTPUT"
+          printf "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOFCHANGELOG" >> "$GITHUB_OUTPUT"
 
   release:
     name: Bump, tag, and release
@@ -102,6 +171,24 @@ jobs:
           VER="${{ needs.check.outputs.next_version }}"
           bash scripts/bump-version.sh "$VER"
 
+      - name: Update CHANGELOG.md
+        run: |
+          VER="${{ needs.check.outputs.next_version }}"
+          DATE="$(date -u +%Y-%m-%d)"
+          ENTRY="## [${VER}] — ${DATE}
+
+          ${{ needs.check.outputs.changelog }}"
+
+          if [ -f CHANGELOG.md ]; then
+            # Insert after the title line
+            EXISTING="$(cat CHANGELOG.md)"
+            HEADER="$(head -1 CHANGELOG.md)"
+            REST="$(tail -n +2 CHANGELOG.md)"
+            printf '%s\n\n%s\n%s\n' "$HEADER" "$ENTRY" "$REST" > CHANGELOG.md
+          else
+            printf '# Changelog\n\n%s\n' "$ENTRY" > CHANGELOG.md
+          fi
+
       - name: Commit and tag
         run: |
           VER="${{ needs.check.outputs.next_version }}"
@@ -110,32 +197,20 @@ jobs:
           git tag "v${VER}"
           git push origin main --tags
 
-      - name: Generate release notes
-        id: notes
-        run: |
-          VER="${{ needs.check.outputs.next_version }}"
-          CURRENT="$(git tag -l 'v*' --sort=-v:refname | grep -v "v${VER}" | head -1)"
-          if [ -n "$CURRENT" ]; then
-            NOTES="$(git log "${CURRENT}..v${VER}" --pretty=format:"- %s" | grep -v "^- chore: bump")"
-          else
-            NOTES="$(git log "v${VER}" --pretty=format:"- %s" | grep -v "^- chore: bump")"
-          fi
-          echo "notes<<EOFNOTES" >> "$GITHUB_OUTPUT"
-          echo "$NOTES" >> "$GITHUB_OUTPUT"
-          echo "EOFNOTES" >> "$GITHUB_OUTPUT"
-
       - name: Create GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VER="${{ needs.check.outputs.next_version }}"
+          NOTES="${{ needs.check.outputs.changelog }}"
           gh release create "v${VER}" \
             --title "v${VER}" \
-            --notes "${{ steps.notes.outputs.notes }}"
+            --notes "$NOTES"
 
   python:
     name: Publish Python to PyPI
-    needs: release
+    needs: [check, release]
+    if: needs.check.outputs.python_changed == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -150,7 +225,8 @@ jobs:
 
   go:
     name: Publish Go SDK
-    needs: release
+    needs: [check, release]
+    if: needs.check.outputs.go_changed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -171,4 +247,3 @@ jobs:
           git push origin "$TAG"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
