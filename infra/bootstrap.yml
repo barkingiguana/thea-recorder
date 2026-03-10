@@ -1,5 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: GitHub Actions OIDC and deployment role for thea-recorder
+Description: >
+  One-time bootstrap: GitHub OIDC provider + minimal deploy role.
+  Deploy this from your Organization (StackSet or assume-role into 884058771712).
+  After this, CI/CD self-manages everything else.
 
 Parameters:
   GitHubOrg:
@@ -23,6 +26,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: !Sub "${GitHubRepo}-deploy"
+      MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -36,30 +40,11 @@ Resources:
               StringLike:
                 token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubOrg}/${GitHubRepo}:*"
       Policies:
-        - PolicyName: SiteDeployment
+        - PolicyName: InfraDeployment
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Sid: S3Deploy
-                Effect: Allow
-                Action:
-                  - s3:PutObject
-                  - s3:DeleteObject
-                  - s3:ListBucket
-                  - s3:GetObject
-                Resource:
-                  - !Sub "arn:aws:s3:::${GitHubRepo}-site"
-                  - !Sub "arn:aws:s3:::${GitHubRepo}-site/*"
-              - Sid: CloudFrontInvalidate
-                Effect: Allow
-                Action:
-                  - cloudfront:CreateInvalidation
-                  - cloudfront:GetInvalidation
-                Resource: "*"
-        - PolicyName: InfraManagement
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
+              # CloudFormation — scoped to stacks prefixed with the repo name
               - Sid: CloudFormation
                 Effect: Allow
                 Action:
@@ -71,39 +56,9 @@ Resources:
                   - cloudformation:GetTemplate
                   - cloudformation:ValidateTemplate
                 Resource:
-                  - !Sub "arn:aws:cloudformation:*:${AWS::AccountId}:stack/${GitHubRepo}-*"
-              - Sid: Route53
-                Effect: Allow
-                Action:
-                  - route53:CreateHostedZone
-                  - route53:GetHostedZone
-                  - route53:ListHostedZones
-                  - route53:ChangeResourceRecordSets
-                  - route53:ListResourceRecordSets
-                  - route53:GetChange
-                Resource: "*"
-              - Sid: ACM
-                Effect: Allow
-                Action:
-                  - acm:RequestCertificate
-                  - acm:DescribeCertificate
-                  - acm:DeleteCertificate
-                  - acm:AddTagsToCertificate
-                  - acm:ListCertificates
-                Resource: "*"
-              - Sid: CloudFrontManage
-                Effect: Allow
-                Action:
-                  - cloudfront:CreateDistribution
-                  - cloudfront:UpdateDistribution
-                  - cloudfront:DeleteDistribution
-                  - cloudfront:GetDistribution
-                  - cloudfront:TagResource
-                  - cloudfront:CreateOriginAccessControl
-                  - cloudfront:UpdateOriginAccessControl
-                  - cloudfront:DeleteOriginAccessControl
-                  - cloudfront:GetOriginAccessControl
-                Resource: "*"
+                  - !Sub "arn:aws:cloudformation:us-east-1:${AWS::AccountId}:stack/${GitHubRepo}-*"
+
+              # S3 — create/manage the site bucket only
               - Sid: S3Manage
                 Effect: Allow
                 Action:
@@ -118,8 +73,71 @@ Resources:
                   - s3:GetBucketPublicAccessBlock
                 Resource:
                   - !Sub "arn:aws:s3:::${GitHubRepo}-site"
+              - Sid: S3Content
+                Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                  - s3:GetObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${GitHubRepo}-site"
+                  - !Sub "arn:aws:s3:::${GitHubRepo}-site/*"
+
+              # Route 53 — hosted zone management
+              # Cannot scope to specific zone ARN at creation time
+              - Sid: Route53
+                Effect: Allow
+                Action:
+                  - route53:CreateHostedZone
+                  - route53:DeleteHostedZone
+                  - route53:GetHostedZone
+                  - route53:ListHostedZones
+                  - route53:ChangeResourceRecordSets
+                  - route53:ListResourceRecordSets
+                  - route53:GetChange
+                  - route53:ChangeTagsForResource
+                Resource: "*"
+
+              # ACM — certificates in us-east-1 (required for CloudFront)
+              - Sid: ACM
+                Effect: Allow
+                Action:
+                  - acm:RequestCertificate
+                  - acm:DescribeCertificate
+                  - acm:DeleteCertificate
+                  - acm:AddTagsToCertificate
+                  - acm:ListCertificates
+                  - acm:ListTagsForCertificate
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion: us-east-1
+
+              # CloudFront — distribution + OAC management
+              - Sid: CloudFront
+                Effect: Allow
+                Action:
+                  - cloudfront:CreateDistribution
+                  - cloudfront:UpdateDistribution
+                  - cloudfront:DeleteDistribution
+                  - cloudfront:GetDistribution
+                  - cloudfront:GetDistributionConfig
+                  - cloudfront:TagResource
+                  - cloudfront:UntagResource
+                  - cloudfront:ListTagsForResource
+                  - cloudfront:CreateInvalidation
+                  - cloudfront:GetInvalidation
+                  - cloudfront:CreateOriginAccessControl
+                  - cloudfront:UpdateOriginAccessControl
+                  - cloudfront:DeleteOriginAccessControl
+                  - cloudfront:GetOriginAccessControl
+                  - cloudfront:GetOriginAccessControlConfig
+                Resource: "*"
 
 Outputs:
   RoleArn:
     Value: !GetAtt DeployRole.Arn
-    Description: ARN for the GitHub Actions deployment role
+    Description: Add this as AWS_ROLE_ARN secret in GitHub repo settings
+  OIDCProviderArn:
+    Value: !Ref GitHubOIDCProvider
