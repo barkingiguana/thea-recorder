@@ -1,18 +1,29 @@
-name: CI
+name: Release
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  release:
+    types: [published]
 
 jobs:
-  versions:
-    name: Version consistency
+  version-check:
+    name: Verify version consistency
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check all package versions match VERSION
+      - name: Read VERSION
+        id: ver
+        run: echo "version=$(cat VERSION | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
+      - name: Check tag matches VERSION
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER="$(cat VERSION | tr -d '[:space:]')"
+          if [ "$TAG" != "$VER" ]; then
+            echo "::error::Tag v$TAG does not match VERSION file ($VER)"
+            exit 1
+          fi
+      - name: Check all package versions match
         run: |
           VER="$(cat VERSION | tr -d '[:space:]')"
           FAIL=0
@@ -26,29 +37,36 @@ jobs:
           exit $FAIL
 
   python:
-    name: Python Tests
+    name: Publish Python to PyPI
+    needs: version-check
     runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v4
-      - run: uv run --extra dev pytest tests/ -v --ignore=tests/e2e
+      - run: uv build
+      - uses: pypa/gh-action-pypi-publish@release/v1
 
   go:
-    name: Go SDK Tests
+    name: Publish Go SDK
+    needs: version-check
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: sdks/go/go.mod
       - run: cd sdks/go && go test ./thea/ -v
-
-  node:
-    name: Node SDK Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: cd sdks/node && npm ci && npm test
+      - run: cd sdks/go && go vet ./thea/
+      - name: Tag Go module
+        run: |
+          VER="${{ needs.version-check.outputs.version }}"
+          TAG="sdks/go/v${VER}"
+          git tag "$TAG"
+          git push origin "$TAG"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
