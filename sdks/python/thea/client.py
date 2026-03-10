@@ -19,6 +19,28 @@ class RecorderError(Exception):
         self.status = status
 
 
+class RecordingResult:
+    """Result of a completed recording session.
+
+    Returned by the :meth:`RecorderClient.recording` context manager
+    after the ``with`` block exits.
+
+    Attributes
+    ----------
+    name:    Recording name passed to ``start_recording``.
+    path:    Absolute path to the saved MP4 file on the server.
+    elapsed: Duration of the recording in seconds.
+    """
+
+    def __init__(self) -> None:
+        self.name: str | None = None
+        self.path: str | None = None
+        self.elapsed: float | None = None
+
+    def __repr__(self) -> str:
+        return f"RecordingResult(name={self.name!r}, path={self.path!r}, elapsed={self.elapsed})"
+
+
 class RecorderClient:
     """Synchronous HTTP client for the thea-recorder server.
 
@@ -43,13 +65,14 @@ class RecorderClient:
             )
         self.base_url: str = resolved.rstrip("/")
         self.timeout: float = timeout
+        self._session_prefix: str = ""  # empty = default session
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _url(self, path: str) -> str:
-        return f"{self.base_url}{path}"
+        return f"{self.base_url}{self._session_prefix}{path}"
 
     def _request(
         self,
@@ -224,6 +247,72 @@ class RecorderClient:
         return self._request("POST", "/cleanup")
 
     # ------------------------------------------------------------------
+    # Session management (parallel recordings)
+    # ------------------------------------------------------------------
+
+    def create_session(
+        self, name: str, display: int | None = None
+    ) -> dict[str, Any]:
+        """POST /sessions — create a new named recording session.
+
+        Each session gets its own Xvfb display, ffmpeg process, and panel
+        set, so multiple browsers can be recorded fully independently from
+        a single server.
+
+        Parameters
+        ----------
+        name:
+            Unique session identifier.
+        display:
+            Explicit X11 display number.  *None* lets the server
+            auto-allocate the next free display.
+
+        Returns
+        -------
+        dict
+            ``{"name": ..., "display": ..., "url_prefix": ...}``
+        """
+        body: dict[str, Any] = {"name": name}
+        if display is not None:
+            body["display"] = display
+        return self._request("POST", "/sessions", body)
+
+    def use_session(self, name: str) -> None:
+        """Route all subsequent calls through a named session.
+
+        After calling ``use_session("alice")``, methods like
+        ``start_display()``, ``add_panel()``, ``start_recording()``, etc.
+        operate on the *alice* session's isolated display and recorder.
+
+        Call ``use_session("")`` or ``use_default_session()`` to switch
+        back to the default session.
+        """
+        if name:
+            self._session_prefix = f"/sessions/{name}"
+        else:
+            self._session_prefix = ""
+
+    def use_default_session(self) -> None:
+        """Route calls back to the default session (undo ``use_session``)."""
+        self._session_prefix = ""
+
+    def delete_session(self, name: str) -> dict[str, Any]:
+        """DELETE /sessions/{name} — stop and remove a named session.
+
+        Cleans up the session's Xvfb display, any in-progress recording,
+        and all panel temp files.  The display number is freed for reuse.
+        """
+        # Always call on the root (not the session prefix)
+        return self._request("DELETE", f"/sessions/{name}")
+
+    def list_sessions(self) -> list[dict[str, Any]]:
+        """GET /sessions — list all active sessions."""
+        result = self._request("GET", "/sessions")
+        if isinstance(result, list):
+            return result  # type: ignore[return-value]
+        return []
+
+    # ------------------------------------------------------------------
     # Convenience helpers
     # ------------------------------------------------------------------
 
@@ -270,24 +359,28 @@ class RecorderClient:
     @contextmanager
     def recording(
         self, name: str
-    ) -> Generator[dict[str, Any], None, None]:
+    ) -> Generator[RecordingResult, None, None]:
         """Context manager that starts and stops a recording.
 
         Usage::
 
-            with client.recording("demo") as info:
-                ...  # info is the start response
-            # recording is automatically stopped
+            with client.recording("demo") as result:
+                ...  # drive your browser here
+            print(result.path)     # MP4 path on server
+            print(result.elapsed)  # duration in seconds
 
-        The recording is stopped even if the body raises an exception.
-        The stop response is attached as ``info["_stop"]`` after exit.
+        The recording is stopped (and the MP4 finalised) even if the
+        body raises an exception.
         """
-        info = self.start_recording(name)
+        result = RecordingResult()
+        result.name = name
+        self.start_recording(name)
         try:
-            yield info
+            yield result
         finally:
             stop = self.stop_recording()
-            info["_stop"] = stop
+            result.path = stop.get("path")
+            result.elapsed = stop.get("elapsed")
 
     @contextmanager
     def panel(

@@ -1205,6 +1205,7 @@ footer {
         <li><a href="#sdks">SDKs</a></li>
         <li><a href="#examples">Examples</a></li>
         <li><a href="#report">Report</a></li>
+        <li><a href="#parallel">Parallel</a></li>
         <li><a href="docs/">Docs</a></li>
         <li><a href="https://github.com/BarkingIguana/thea-recorder" class="nav-pip">pip install thea-recorder</a></li>
     </ul>
@@ -1934,6 +1935,119 @@ curl <span class="op">-o</span> login_test.mp4 localhost:9123/recordings/login_t
                     a JUnit XML report.
                 </p>
             </div>
+            <div class="beyond-card">
+                <h4>Scripted product demos</h4>
+                <p>
+                    You don't need a test framework. Write a Python script that drives
+                    a browser, narrates each scene in the overlay panel, and produces a
+                    polished MP4. Ship a fresh demo video with every release — no
+                    presenter required.
+                </p>
+            </div>
+            <div class="beyond-card">
+                <h4>Parallel user simulation</h4>
+                <p>
+                    One server manages multiple independent sessions. Pretend to be
+                    Alice, Bob, and Carol at the same time: each gets their own virtual
+                    display, their own recording, and their own panel overlay — driven
+                    by threads or separate processes from a single script.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ PARALLEL SESSIONS ═══ -->
+<section class="beyond-section" id="parallel">
+    <div class="section-inner">
+        <div class="section-label">Parallel &amp; Demos</div>
+        <h2>One server. Multiple sessions.</h2>
+        <p class="section-sub">
+            A single <code>thea serve</code> process manages any number of concurrent recording
+            sessions. Each session gets its own Xvfb display, its own ffmpeg process, and its own
+            panel overlay — completely isolated from every other session.
+        </p>
+
+        <div class="code-block">
+            <div class="code-tabs">
+                <button class="example-tab active" onclick="showParallelTab('parallel-py')">Python — parallel users</button>
+                <button class="example-tab" onclick="showParallelTab('parallel-demo')">Python — product demo</button>
+                <button class="example-tab" onclick="showParallelTab('parallel-curl')">curl</button>
+            </div>
+
+            <div class="example-panel active" id="parallel-py">
+<div class="terminal-body"><span class="kw">import</span> threading
+<span class="kw">from</span> <span class="fn">thea</span> <span class="kw">import</span> RecorderClient
+
+<span class="kw">def</span> <span class="fn">user_session</span>(user_id):
+    client <span class="op">=</span> RecorderClient(<span class="str">"http://localhost:9123"</span>)
+
+    <span class="cm"># Each session gets its own Xvfb display, auto-allocated</span>
+    client.<span class="fn">create_session</span>(<span class="str">f"user_{user_id}"</span>)
+    client.<span class="fn">use_session</span>(<span class="str">f"user_{user_id}"</span>)
+    client.<span class="fn">start_display</span>()
+    client.<span class="fn">add_panel</span>(<span class="str">"status"</span>, title=<span class="str">"Status"</span>)
+
+    <span class="kw">with</span> client.<span class="fn">recording</span>(<span class="str">f"user_{user_id}_checkout"</span>) <span class="kw">as</span> result:
+        <span class="cm"># drive this user's browser independently…</span>
+        client.<span class="fn">update_panel</span>(<span class="str">"status"</span>, <span class="str">"Checking out"</span>)
+
+    <span class="fn">print</span>(result.path, result.elapsed)
+    client.<span class="fn">delete_session</span>(<span class="str">f"user_{user_id}"</span>)
+
+threads <span class="op">=</span> [threading.<span class="fn">Thread</span>(target=user_session, args=(i,)) <span class="kw">for</span> i <span class="kw">in</span> [<span class="str">1</span>, <span class="str">2</span>, <span class="str">3</span>]]
+<span class="kw">for</span> t <span class="kw">in</span> threads: t.<span class="fn">start</span>()
+<span class="kw">for</span> t <span class="kw">in</span> threads: t.<span class="fn">join</span>()</div>
+            </div>
+
+            <div class="example-panel" id="parallel-demo">
+<div class="terminal-body"><span class="kw">from</span> <span class="fn">thea</span> <span class="kw">import</span> RecorderClient
+
+client <span class="op">=</span> RecorderClient(<span class="str">"http://localhost:9123"</span>)
+client.<span class="fn">wait_until_ready</span>(timeout=<span class="str">30</span>)
+client.<span class="fn">start_display</span>()
+client.<span class="fn">add_panel</span>(<span class="str">"scene"</span>,  title=<span class="str">"Scene"</span>,  width=<span class="str">260</span>)
+client.<span class="fn">add_panel</span>(<span class="str">"action"</span>, title=<span class="str">"Action"</span>)
+
+<span class="kw">def</span> <span class="fn">narrate</span>(scene, action):
+    client.<span class="fn">update_panel</span>(<span class="str">"scene"</span>,  scene)
+    client.<span class="fn">update_panel</span>(<span class="str">"action"</span>, action)
+
+<span class="kw">with</span> client.<span class="fn">recording</span>(<span class="str">"product_demo_v2"</span>) <span class="kw">as</span> result:
+    <span class="fn">narrate</span>(<span class="str">"Login"</span>,     <span class="str">"Navigating to the login page"</span>)
+    <span class="cm"># driver.get("https://app.example.com/login")</span>
+    <span class="fn">narrate</span>(<span class="str">"Login"</span>,     <span class="str">"Entering credentials"</span>)
+    <span class="fn">narrate</span>(<span class="str">"Dashboard"</span>, <span class="str">"Key metrics at a glance"</span>)
+    <span class="fn">narrate</span>(<span class="str">"Reports"</span>,   <span class="str">"Exporting monthly PDF…"</span>)
+
+<span class="fn">print</span>(<span class="str">f"Demo: {result.path} ({result.elapsed:.1f}s)"</span>)
+client.<span class="fn">cleanup</span>()</div>
+            </div>
+
+            <div class="example-panel" id="parallel-curl">
+<div class="terminal-body"><span class="cm"># Create two independent sessions</span>
+curl -X POST localhost:9123/sessions -d <span class="str">'{"name":"alice"}'</span>
+<span class="cm"># → {"name":"alice","display":100,"url_prefix":"/sessions/alice"}</span>
+
+curl -X POST localhost:9123/sessions -d <span class="str">'{"name":"bob"}'</span>
+<span class="cm"># → {"name":"bob","display":101,"url_prefix":"/sessions/bob"}</span>
+
+<span class="cm"># Each session has its own Xvfb, panels, and recording</span>
+curl -X POST localhost:9123/sessions/alice/display/start
+curl -X POST localhost:9123/sessions/bob/display/start
+
+curl -X POST localhost:9123/sessions/alice/recording/start \
+  -d <span class="str">'{"name":"alice_checkout"}'</span>
+curl -X POST localhost:9123/sessions/bob/recording/start \
+  -d <span class="str">'{"name":"bob_checkout"}'</span>
+
+<span class="cm"># … both browsers record independently …</span>
+
+curl -X POST localhost:9123/sessions/alice/recording/stop
+curl -X POST localhost:9123/sessions/bob/recording/stop
+curl -X DELETE localhost:9123/sessions/alice
+curl -X DELETE localhost:9123/sessions/bob</div>
+            </div>
         </div>
     </div>
 </section>
@@ -1977,6 +2091,14 @@ function showHeroTab(name) {
     document.querySelectorAll('.hero-lang-tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.hero-lang-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('hero-' + name).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+
+function showParallelTab(name) {
+    const block = document.getElementById(name).closest('.code-block');
+    block.querySelectorAll('.example-tab').forEach(t => t.classList.remove('active'));
+    block.querySelectorAll('.example-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(name).classList.add('active');
     event.currentTarget.classList.add('active');
 }
 </script>

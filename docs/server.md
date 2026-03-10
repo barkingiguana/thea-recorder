@@ -260,6 +260,86 @@ Example:
 {"error": "panel 'foo' not found"}
 ```
 
+## Sessions (parallel recordings)
+
+A single server can manage any number of independent recording sessions.  Each
+session has its own Xvfb virtual display, ffmpeg process, and panel set.  This
+lets you record 2–3 concurrent browser sessions without running multiple servers.
+
+### Create a session
+
+```bash
+curl -X POST http://localhost:9123/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"name": "alice"}'
+```
+**Response** `201`:
+```json
+{"name": "alice", "display": 100, "url_prefix": "/sessions/alice"}
+```
+`display` is auto-allocated if not supplied.  The `url_prefix` is the base for
+all session-scoped calls.
+
+**Error** `409` if the name already exists.  `400` if name is missing or
+`"default"` (reserved for the implicit default session).
+
+### List sessions
+
+```bash
+curl http://localhost:9123/sessions
+```
+**Response** `200`:
+```json
+[
+  {"name": "default", "display": 99,  "recording": false, "recording_name": null},
+  {"name": "alice",   "display": 100, "recording": true,  "recording_name": "alice_checkout"}
+]
+```
+
+### Destroy a session
+
+```bash
+curl -X DELETE http://localhost:9123/sessions/alice
+```
+Stops any in-progress recording, stops Xvfb, removes panels.
+**Response** `200`: `{"status": "removed"}`
+
+### Session-scoped endpoints
+
+Every display, panel, and recording endpoint is available under
+`/sessions/{name}/...`:
+
+```bash
+# Start the session's virtual display
+curl -X POST http://localhost:9123/sessions/alice/display/start
+
+# Add a panel
+curl -X POST http://localhost:9123/sessions/alice/panels \
+  -H "Content-Type: application/json" \
+  -d '{"name": "status", "title": "Status"}'
+
+# Start recording
+curl -X POST http://localhost:9123/sessions/alice/recording/start \
+  -H "Content-Type: application/json" \
+  -d '{"name": "alice_checkout"}'
+
+# Update a panel
+curl -X PUT http://localhost:9123/sessions/alice/panels/status \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Step 3 of 5"}'
+
+# Stop recording
+curl -X POST http://localhost:9123/sessions/alice/recording/stop
+
+# Session health
+curl http://localhost:9123/sessions/alice/health
+```
+
+The top-level endpoints (`/display/start`, `/panels`, `/recording/start`, etc.)
+continue to work as before and operate on the **default** session.
+
+See [Orchestration guide](orchestration.md) for parallel recording examples.
+
 ## Thread Safety
 
 All endpoints that mutate recorder state are protected by a `threading.Lock`. Concurrent callers (e.g., multiple SDK clients or panel updates from different threads) are safe.

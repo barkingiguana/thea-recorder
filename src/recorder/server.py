@@ -1,8 +1,10 @@
-"""HTTP server wrapping a single Recorder instance.
+"""HTTP server wrapping one or more named Recorder sessions.
 
-Provides a REST API for display management, panel control, recording
-lifecycle, and file downloads.  Designed to be consumed by SDKs in any
-language or directly via curl.
+Each session has its own Xvfb display, ffmpeg process, and panel set —
+browsers in different sessions are completely isolated from each other.
+
+A *default* session is created at startup using the configured display
+number.  Additional sessions can be created dynamically via the REST API.
 
 Start with::
 
@@ -39,21 +41,46 @@ def create_app(
     app = Flask(__name__)
     app.config["JSONIFY_PRETTYPRINT_REGULAR"] = False
 
-    recorder = Recorder(
-        output_dir=output_dir,
-        display=display,
-        browser_size=browser_size,
-        framerate=framerate,
-    )
+    # -- Session store -----------------------------------------------------
+    #
+    # Each session is a dict:
+    #   recorder      – Recorder instance
+    #   lock          – threading.Lock protecting the recorder
+    #   current_name  – {"name": str|None} (active recording name)
+    #   display       – X11 display number (int)
 
-    lock = threading.Lock()
+    _sessions: dict[str, dict] = {}
+    _sessions_lock = threading.Lock()
+    _next_display = [display + 1]   # auto-allocate display numbers
+
+    def _make_session(display_num: int) -> dict:
+        return {
+            "recorder": Recorder(
+                output_dir=output_dir,
+                display=display_num,
+                browser_size=browser_size,
+                framerate=framerate,
+            ),
+            "lock": threading.Lock(),
+            "current_name": {"name": None},
+            "display": display_num,
+        }
+
+    # default session (backward-compat — existing endpoints use this)
+    _default = _make_session(display)
+    _sessions["default"] = _default
+
+    # Convenience aliases for all the existing route handlers below
+    recorder              = _default["recorder"]
+    lock                  = _default["lock"]
+    current_recording_name = _default["current_name"]
+
     start_time = time.monotonic()
-    current_recording_name: dict = {"name": None}
 
     # -- Helpers -----------------------------------------------------------
 
     def locked(f):
-        """Decorator that acquires the recorder lock for the duration."""
+        """Decorator that acquires the *default* session lock."""
         @wraps(f)
         def wrapper(*args, **kwargs):
             with lock:
@@ -61,19 +88,14 @@ def create_app(
         return wrapper
 
     def _safe_recording_name(name: str) -> bool:
-        """Reject path traversal attempts."""
         return ".." not in name and "/" not in name and "\\" not in name and name.strip() != ""
 
     def _resolve_recording_path(name: str) -> str | None:
-        """Resolve a recording name to a file path, or None."""
         safe = re.sub(r"[^\w\-.]", "_", name)[:120]
         path = os.path.join(output_dir, f"{safe}.mp4")
-        if os.path.isfile(path):
-            return path
-        return None
+        return path if os.path.isfile(path) else None
 
     def _list_mp4s() -> list[dict]:
-        """List all MP4 files in the output directory."""
         os.makedirs(output_dir, exist_ok=True)
         result = []
         for fname in sorted(os.listdir(output_dir)):
@@ -82,12 +104,128 @@ def create_app(
             fpath = os.path.join(output_dir, fname)
             stat = os.stat(fpath)
             result.append({
-                "name": fname[:-4],  # strip .mp4
+                "name": fname[:-4],
                 "path": fpath,
                 "size": stat.st_size,
                 "created": datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).isoformat(),
             })
         return result
+
+    def _session_or_404(name: str):
+        """Return (session, None) or (None, error_response)."""
+        with _sessions_lock:
+            sess = _sessions.get(name)
+        if sess is None:
+            return None, (jsonify({"error": f"session '{name}' not found"}), 404)
+        return sess, None
+
+    # -- Per-session business logic ----------------------------------------
+    # Each function accepts explicit session components so it can be
+    # called from both the default routes and the /sessions/<name>/... routes.
+
+    def _impl_display_start(rec, sess_lock):
+        with sess_lock:
+            if rec._xvfb_proc is not None:
+                return jsonify({"error": "display already started"}), 409
+            rec.start_display()
+            return jsonify({"status": "started", "display": rec.display_string}), 201
+
+    def _impl_display_stop(rec, sess_lock):
+        with sess_lock:
+            rec.stop_display()
+            return jsonify({"status": "stopped"}), 200
+
+    def _impl_panels_list(rec, sess_lock):
+        with sess_lock:
+            panels = [
+                {"name": n, "title": p["title"], "width": p["width"]}
+                for n, p in rec._panels.items()
+            ]
+        return jsonify(panels), 200
+
+    def _impl_panels_create(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        name = data.get("name")
+        if not name or not isinstance(name, str) or name.strip() == "":
+            return jsonify({"error": "field 'name' is required and must be a non-empty string"}), 400
+        title = data.get("title", "")
+        width = data.get("width")
+        if width is not None:
+            if not isinstance(width, int) or width <= 0:
+                return jsonify({"error": "field 'width' must be a positive integer"}), 400
+        with sess_lock:
+            rec.add_panel(name, title=title, width=width)
+        return jsonify({"name": name, "title": title, "width": width}), 201
+
+    def _impl_panels_update(rec, sess_lock, panel_name):
+        with sess_lock:
+            if panel_name not in rec._panels:
+                return jsonify({"error": f"panel '{panel_name}' not found"}), 404
+            data = request.get_json(silent=True) or {}
+            text = data.get("text", "")
+            focus_line = data.get("focus_line", -1)
+            rec.update_panel(panel_name, text, focus_line=focus_line)
+        return jsonify({"name": panel_name, "text": text}), 200
+
+    def _impl_panels_delete(rec, sess_lock, panel_name):
+        with sess_lock:
+            if panel_name not in rec._panels:
+                return jsonify({"error": f"panel '{panel_name}' not found"}), 404
+            rec.remove_panel(panel_name)
+        return jsonify({"status": "removed"}), 200
+
+    def _impl_recording_start(rec, sess_lock, cur_name):
+        data = request.get_json(silent=True) or {}
+        name = data.get("name")
+        if not name or not isinstance(name, str) or name.strip() == "":
+            return jsonify({"error": "field 'name' is required and must be a non-empty string"}), 400
+        with sess_lock:
+            if rec._ffmpeg_proc is not None:
+                return jsonify({"error": "already recording"}), 409
+            cur_name["name"] = name
+            rec.start_recording(name)
+        return jsonify({"status": "recording", "name": name}), 201
+
+    def _impl_recording_stop(rec, sess_lock, cur_name):
+        with sess_lock:
+            if rec._ffmpeg_proc is None:
+                return jsonify({"error": "not recording"}), 409
+            elapsed = rec.recording_elapsed
+            path = rec.stop_recording()
+            name = cur_name["name"]
+            cur_name["name"] = None
+        return jsonify({"path": path, "elapsed": round(elapsed, 2), "name": name}), 200
+
+    def _impl_recording_elapsed(rec, sess_lock):
+        with sess_lock:
+            elapsed = rec.recording_elapsed
+        return jsonify({"elapsed": round(elapsed, 2)}), 200
+
+    def _impl_recording_status(rec, sess_lock, cur_name):
+        with sess_lock:
+            is_recording = rec._ffmpeg_proc is not None
+            name = cur_name["name"] if is_recording else None
+            elapsed = round(rec.recording_elapsed, 2)
+        return jsonify({"recording": is_recording, "name": name, "elapsed": elapsed}), 200
+
+    def _impl_cleanup(rec, sess_lock, cur_name):
+        with sess_lock:
+            cur_name["name"] = None
+            rec.cleanup()
+        return jsonify({"status": "cleaned"}), 200
+
+    def _impl_health(rec, sess_lock, uptime):
+        with sess_lock:
+            is_recording = rec._ffmpeg_proc is not None
+            disp = rec.display_string
+            panels = list(rec._panels.keys())
+        return jsonify({
+            "status": "ok",
+            "recording": is_recording,
+            "display": disp,
+            "panels": panels,
+            "uptime": round(uptime, 1),
+        }), 200
 
     # -- CORS --------------------------------------------------------------
 
@@ -124,109 +262,193 @@ def create_app(
         )
         return response
 
-    # -- Display endpoints -------------------------------------------------
+    # ── Session management ────────────────────────────────────────────────
 
-    @app.route("/display/start", methods=["POST"])
-    @locked
-    def display_start():
-        if recorder._xvfb_proc is not None:
-            return jsonify({"error": "display already started"}), 409
-        recorder.start_display()
-        return jsonify({"status": "started", "display": recorder.display_string}), 201
-
-    @app.route("/display/stop", methods=["POST"])
-    @locked
-    def display_stop():
-        recorder.stop_display()
-        return jsonify({"status": "stopped"}), 200
-
-    # -- Panel endpoints ---------------------------------------------------
-
-    @app.route("/panels", methods=["GET"])
-    @locked
-    def panels_list():
-        panels = [
-            {"name": name, "title": p["title"], "width": p["width"]}
-            for name, p in recorder._panels.items()
-        ]
-        return jsonify(panels), 200
-
-    @app.route("/panels", methods=["POST"])
-    @locked
-    def panels_create():
+    @app.route("/sessions", methods=["POST"])
+    def sessions_create():
+        """Create a new named session with its own display and recorder."""
         data = request.get_json(silent=True) or {}
         name = data.get("name")
         if not name or not isinstance(name, str) or name.strip() == "":
             return jsonify({"error": "field 'name' is required and must be a non-empty string"}), 400
-        title = data.get("title", "")
-        width = data.get("width")
-        if width is not None:
-            if not isinstance(width, int) or width <= 0:
-                return jsonify({"error": "field 'width' must be a positive integer"}), 400
-        recorder.add_panel(name, title=title, width=width)
-        return jsonify({"name": name, "title": title, "width": width}), 201
+        if name == "default":
+            return jsonify({"error": "session name 'default' is reserved"}), 400
 
-    @app.route("/panels/<name>", methods=["PUT"])
-    @locked
-    def panels_update(name):
-        if name not in recorder._panels:
-            return jsonify({"error": f"panel '{name}' not found"}), 404
-        data = request.get_json(silent=True) or {}
-        text = data.get("text", "")
-        focus_line = data.get("focus_line", -1)
-        recorder.update_panel(name, text, focus_line=focus_line)
-        return jsonify({"name": name, "text": text}), 200
+        with _sessions_lock:
+            if name in _sessions:
+                return jsonify({"error": f"session '{name}' already exists"}), 409
+            # Accept explicit display number or auto-allocate
+            raw_display = data.get("display")
+            if raw_display is not None:
+                if not isinstance(raw_display, int) or raw_display < 0:
+                    return jsonify({"error": "field 'display' must be a non-negative integer"}), 400
+                display_num = raw_display
+            else:
+                display_num = _next_display[0]
+                _next_display[0] += 1
+            sess = _make_session(display_num)
+            _sessions[name] = sess
 
-    @app.route("/panels/<name>", methods=["DELETE"])
-    @locked
-    def panels_delete(name):
-        if name not in recorder._panels:
-            return jsonify({"error": f"panel '{name}' not found"}), 404
-        recorder.remove_panel(name)
+        return jsonify({"name": name, "display": display_num, "url_prefix": f"/sessions/{name}"}), 201
+
+    @app.route("/sessions", methods=["GET"])
+    def sessions_list():
+        """List all active sessions."""
+        with _sessions_lock:
+            result = []
+            for sess_name, sess in _sessions.items():
+                with sess["lock"]:
+                    is_rec = sess["recorder"]._ffmpeg_proc is not None
+                    cur = sess["current_name"]["name"]
+                result.append({
+                    "name": sess_name,
+                    "display": sess["display"],
+                    "recording": is_rec,
+                    "recording_name": cur,
+                })
+        return jsonify(result), 200
+
+    @app.route("/sessions/<session_name>", methods=["DELETE"])
+    def sessions_delete(session_name):
+        """Destroy a named session (cleanup + remove)."""
+        if session_name == "default":
+            return jsonify({"error": "the default session cannot be deleted"}), 400
+        with _sessions_lock:
+            sess = _sessions.pop(session_name, None)
+        if sess is None:
+            return jsonify({"error": f"session '{session_name}' not found"}), 404
+        _impl_cleanup(sess["recorder"], sess["lock"], sess["current_name"])
         return jsonify({"status": "removed"}), 200
 
-    # -- Recording endpoints -----------------------------------------------
+    # ── Session-scoped endpoints (/sessions/<name>/...) ────────────────────
+
+    @app.route("/sessions/<session_name>/display/start", methods=["POST"])
+    def sess_display_start(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_display_start(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/display/stop", methods=["POST"])
+    def sess_display_stop(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_display_stop(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/panels", methods=["GET"])
+    def sess_panels_list(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_panels_list(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/panels", methods=["POST"])
+    def sess_panels_create(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_panels_create(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/panels/<panel_name>", methods=["PUT"])
+    def sess_panels_update(session_name, panel_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_panels_update(sess["recorder"], sess["lock"], panel_name)
+
+    @app.route("/sessions/<session_name>/panels/<panel_name>", methods=["DELETE"])
+    def sess_panels_delete(session_name, panel_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_panels_delete(sess["recorder"], sess["lock"], panel_name)
+
+    @app.route("/sessions/<session_name>/recording/start", methods=["POST"])
+    def sess_recording_start(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_recording_start(sess["recorder"], sess["lock"], sess["current_name"])
+
+    @app.route("/sessions/<session_name>/recording/stop", methods=["POST"])
+    def sess_recording_stop(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_recording_stop(sess["recorder"], sess["lock"], sess["current_name"])
+
+    @app.route("/sessions/<session_name>/recording/elapsed", methods=["GET"])
+    def sess_recording_elapsed(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_recording_elapsed(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/recording/status", methods=["GET"])
+    def sess_recording_status(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_recording_status(sess["recorder"], sess["lock"], sess["current_name"])
+
+    @app.route("/sessions/<session_name>/cleanup", methods=["POST"])
+    def sess_cleanup(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_cleanup(sess["recorder"], sess["lock"], sess["current_name"])
+
+    @app.route("/sessions/<session_name>/health", methods=["GET"])
+    def sess_health(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_health(sess["recorder"], sess["lock"], time.monotonic() - start_time)
+
+    # ── Default session endpoints (backward-compatible) ───────────────────
+
+    @app.route("/display/start", methods=["POST"])
+    def display_start():
+        return _impl_display_start(recorder, lock)
+
+    @app.route("/display/stop", methods=["POST"])
+    def display_stop():
+        return _impl_display_stop(recorder, lock)
+
+    @app.route("/panels", methods=["GET"])
+    def panels_list():
+        return _impl_panels_list(recorder, lock)
+
+    @app.route("/panels", methods=["POST"])
+    def panels_create():
+        return _impl_panels_create(recorder, lock)
+
+    @app.route("/panels/<name>", methods=["PUT"])
+    def panels_update(name):
+        return _impl_panels_update(recorder, lock, name)
+
+    @app.route("/panels/<name>", methods=["DELETE"])
+    def panels_delete(name):
+        return _impl_panels_delete(recorder, lock, name)
 
     @app.route("/recording/start", methods=["POST"])
-    @locked
     def recording_start():
-        if recorder._ffmpeg_proc is not None:
-            return jsonify({"error": "already recording"}), 409
-        data = request.get_json(silent=True) or {}
-        name = data.get("name")
-        if not name or not isinstance(name, str) or name.strip() == "":
-            return jsonify({"error": "field 'name' is required and must be a non-empty string"}), 400
-        current_recording_name["name"] = name
-        recorder.start_recording(name)
-        return jsonify({"status": "recording", "name": name}), 201
+        return _impl_recording_start(recorder, lock, current_recording_name)
 
     @app.route("/recording/stop", methods=["POST"])
-    @locked
     def recording_stop():
-        if recorder._ffmpeg_proc is None:
-            return jsonify({"error": "not recording"}), 409
-        elapsed = recorder.recording_elapsed
-        path = recorder.stop_recording()
-        name = current_recording_name["name"]
-        current_recording_name["name"] = None
-        return jsonify({"path": path, "elapsed": round(elapsed, 2), "name": name}), 200
+        return _impl_recording_stop(recorder, lock, current_recording_name)
 
     @app.route("/recording/elapsed", methods=["GET"])
-    @locked
     def recording_elapsed():
-        return jsonify({"elapsed": round(recorder.recording_elapsed, 2)}), 200
+        return _impl_recording_elapsed(recorder, lock)
 
     @app.route("/recording/status", methods=["GET"])
-    @locked
     def recording_status():
-        is_recording = recorder._ffmpeg_proc is not None
-        return jsonify({
-            "recording": is_recording,
-            "name": current_recording_name["name"] if is_recording else None,
-            "elapsed": round(recorder.recording_elapsed, 2),
-        }), 200
+        return _impl_recording_status(recorder, lock, current_recording_name)
 
-    # -- File access endpoints ---------------------------------------------
+    # -- File access endpoints (shared across all sessions) ----------------
 
     @app.route("/recordings", methods=["GET"])
     def recordings_list():
@@ -240,7 +462,6 @@ def create_app(
         if not path:
             return jsonify({"error": f"recording '{name}' not found"}), 404
 
-        # Support Range requests for video seeking
         file_size = os.path.getsize(path)
         range_header = request.headers.get("Range")
 
@@ -248,19 +469,15 @@ def create_app(
             match = re.match(r"bytes=(\d+)-(\d*)", range_header)
             if not match:
                 return jsonify({"error": "invalid Range header"}), 416
-
             start = int(match.group(1))
             end = int(match.group(2)) if match.group(2) else file_size - 1
             end = min(end, file_size - 1)
-
             if start > end or start >= file_size:
                 return jsonify({"error": "range not satisfiable"}), 416
-
             length = end - start + 1
             with open(path, "rb") as f:
                 f.seek(start)
                 data = f.read(length)
-
             resp = Response(
                 data,
                 status=206,
@@ -299,36 +516,30 @@ def create_app(
     # -- Utility endpoints -------------------------------------------------
 
     @app.route("/health", methods=["GET"])
-    @locked
     def health():
-        return jsonify({
-            "status": "ok",
-            "recording": recorder._ffmpeg_proc is not None,
-            "display": recorder.display_string,
-            "panels": list(recorder._panels.keys()),
-            "uptime": round(time.monotonic() - start_time, 1),
-        }), 200
+        return _impl_health(recorder, lock, time.monotonic() - start_time)
 
     @app.route("/cleanup", methods=["POST"])
-    @locked
     def cleanup():
-        current_recording_name["name"] = None
-        recorder.cleanup()
-        return jsonify({"status": "cleaned"}), 200
+        return _impl_cleanup(recorder, lock, current_recording_name)
 
     # -- Graceful shutdown -------------------------------------------------
 
     def _shutdown_handler(signum, frame):
-        logger.info("Received signal %s, cleaning up...", signum)
-        with lock:
-            recorder.cleanup()
+        logger.info("Received signal %s, cleaning up…", signum)
+        with _sessions_lock:
+            for sess in _sessions.values():
+                with sess["lock"]:
+                    sess["recorder"].cleanup()
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, _shutdown_handler)
 
-    # Store recorder on app for testing
+    # Expose internals for testing
     app._recorder = recorder
     app._lock = lock
     app._current_recording_name = current_recording_name
+    app._sessions = _sessions
+    app._sessions_lock = _sessions_lock
 
     return app
