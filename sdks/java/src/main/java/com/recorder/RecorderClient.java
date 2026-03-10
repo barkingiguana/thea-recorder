@@ -100,14 +100,33 @@ public class RecorderClient implements AutoCloseable {
      * @param name  panel identifier
      * @param title panel title
      * @param width panel width in characters
+     * @return list of warnings from the server (may be empty)
      */
-    public void addPanel(String name, String title, int width) {
-        var body = jsonObject(Map.of(
-                "name", jsonString(name),
-                "title", jsonString(title),
-                "width", String.valueOf(width)
-        ));
-        post("/panels", body, 201);
+    public List<String> addPanel(String name, String title, int width) {
+        return addPanel(name, title, width, null);
+    }
+
+    /**
+     * Adds a new panel with optional height.
+     *
+     * @param name   panel identifier
+     * @param title  panel title
+     * @param width  panel width in characters
+     * @param height panel height in lines (null to omit)
+     * @return list of warnings from the server (may be empty)
+     */
+    public List<String> addPanel(String name, String title, Integer width, Integer height) {
+        var fields = new LinkedHashMap<String, String>();
+        fields.put("name", jsonString(name));
+        fields.put("title", jsonString(title));
+        if (width != null) {
+            fields.put("width", String.valueOf(width));
+        }
+        if (height != null) {
+            fields.put("height", String.valueOf(height));
+        }
+        var json = post("/panels", jsonObject(fields), 201);
+        return parseWarnings(json);
     }
 
     /**
@@ -167,10 +186,12 @@ public class RecorderClient implements AutoCloseable {
      * Starts a recording.
      *
      * @param name recording name
+     * @return list of warnings from the server (may be empty)
      */
-    public void startRecording(String name) {
+    public List<String> startRecording(String name) {
         var body = jsonObject(Map.of("name", jsonString(name)));
-        post("/recording/start", body, 201);
+        var json = post("/recording/start", body, 201);
+        return parseWarnings(json);
     }
 
     /**
@@ -487,6 +508,34 @@ public class RecorderClient implements AutoCloseable {
             }
         }
         throw new RecorderError("Composition not ready after " + timeoutMs + "ms");
+    }
+
+    // ── Layout & Diagnostics ────────────────────────────────────────────
+
+    /**
+     * Validates the current panel layout.
+     *
+     * @return validation result with warnings and validity flag
+     */
+    public ValidationResult validateLayout() {
+        var json = get("/validate-layout", 200);
+        return new ValidationResult(
+                parseBool(jsonValue(json, "valid")),
+                parseWarnings(json)
+        );
+    }
+
+    /**
+     * Gets a test card SVG for the current display configuration.
+     *
+     * @return SVG content as a string
+     */
+    public String testcard() {
+        var request = newRequest("/testcard")
+                .header("Accept", "image/svg+xml")
+                .GET()
+                .build();
+        return send(request, 200);
     }
 
     // ── Health & Cleanup ─────────────────────────────────────────────────
@@ -846,10 +895,17 @@ public class RecorderClient implements AutoCloseable {
             panels.add(new Panel(
                     jsonValue(el, "name"),
                     jsonValue(el, "title"),
-                    parseInt(jsonValue(el, "width"))
+                    parseInt(jsonValue(el, "width")),
+                    parseInt(jsonValue(el, "height"))
             ));
         }
         return panels;
+    }
+
+    private List<String> parseWarnings(String json) {
+        var raw = jsonRawValue(json, "warnings");
+        if (raw == null) return List.of();
+        return parseStringArray(raw);
     }
 
     private CompositionStatus parseCompositionStatus(String json) {

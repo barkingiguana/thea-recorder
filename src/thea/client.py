@@ -209,12 +209,36 @@ class RecorderClient:
     # ------------------------------------------------------------------
 
     def add_panel(
-        self, name: str, title: str, width: int
+        self,
+        name: str,
+        title: str,
+        width: int | None = None,
+        height: int | None = None,
     ) -> dict[str, Any]:
-        """POST /panels — create a new panel."""
-        return self._request(
-            "POST", "/panels", {"name": name, "title": title, "width": width}
-        )
+        """POST /panels — create a new panel.
+
+        Parameters
+        ----------
+        name:
+            Unique panel identifier.
+        title:
+            Bold heading for the panel.
+        width:
+            Fixed width in pixels (*None* = auto).
+        height:
+            Panel height in pixels (*None* = use bar height default).
+
+        Returns
+        -------
+        dict
+            Response including optional ``warnings`` list.
+        """
+        body: dict[str, Any] = {"name": name, "title": title}
+        if width is not None:
+            body["width"] = width
+        if height is not None:
+            body["height"] = height
+        return self._request("POST", "/panels", body)
 
     def update_panel(
         self,
@@ -296,6 +320,30 @@ class RecorderClient:
     def cleanup(self) -> dict[str, Any]:
         """POST /cleanup — remove temporary resources."""
         return self._request("POST", "/cleanup")
+
+    # ------------------------------------------------------------------
+    # Layout validation
+    # ------------------------------------------------------------------
+
+    def validate_layout(self) -> dict[str, Any]:
+        """GET /validate-layout — validate the current panel layout.
+
+        Returns
+        -------
+        dict
+            ``{"warnings": [...], "valid": bool}``
+        """
+        return self._request("GET", "/validate-layout")
+
+    def testcard(self) -> str:
+        """GET /testcard — generate an SVG testcard of the current layout.
+
+        Returns
+        -------
+        str
+            SVG markup.
+        """
+        return self._request_raw("GET", "/testcard").decode("utf-8")
 
     # ------------------------------------------------------------------
     # Session management (parallel recordings)
@@ -640,17 +688,21 @@ class RecorderClient:
 
     @contextmanager
     def panel(
-        self, name: str, title: str, width: int
+        self,
+        name: str,
+        title: str,
+        width: int | None = None,
+        height: int | None = None,
     ) -> Generator[dict[str, Any], None, None]:
         """Context manager that creates and removes a panel.
 
         Usage::
 
-            with client.panel("code", "Source", 80) as info:
+            with client.panel("code", "Source", width=80) as info:
                 client.update_panel("code", "hello world")
             # panel is removed automatically
         """
-        info = self.add_panel(name, title, width)
+        info = self.add_panel(name, title, width=width, height=height)
         try:
             yield info
         finally:

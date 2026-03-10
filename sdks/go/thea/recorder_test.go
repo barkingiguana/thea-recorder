@@ -56,6 +56,7 @@ func fakeServer() *httptest.Server {
 			json.NewDecoder(r.Body).Decode(&p)
 			panels = append(panels, p)
 			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]any{"warnings": []string{}})
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -110,6 +111,7 @@ func fakeServer() *httptest.Server {
 		recording.Store(true)
 		recName.Store(body.Name)
 		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(map[string]any{"warnings": []string{}})
 	})
 	mux.HandleFunc("/recording/stop", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -217,7 +219,7 @@ func TestPanelLifecycle(t *testing.T) {
 	c := newTestClient(ts)
 	ctx := context.Background()
 
-	if err := c.AddPanel(ctx, "code", "Code", 80); err != nil {
+	if _, err := c.AddPanel(ctx, "code", "Code", 80, nil); err != nil {
 		t.Fatalf("AddPanel: %v", err)
 	}
 
@@ -256,7 +258,7 @@ func TestWithPanel(t *testing.T) {
 	ctx := context.Background()
 
 	called := false
-	err := c.WithPanel(ctx, "tmp", "Temp", 60, func() error {
+	err := c.WithPanel(ctx, "tmp", "Temp", 60, nil, func() error {
 		called = true
 		panels, err := c.ListPanels(ctx)
 		if err != nil {
@@ -291,7 +293,7 @@ func TestRecordingLifecycle(t *testing.T) {
 	c := newTestClient(ts)
 	ctx := context.Background()
 
-	if err := c.StartRecording(ctx, "test-rec"); err != nil {
+	if _, err := c.StartRecording(ctx, "test-rec"); err != nil {
 		t.Fatalf("StartRecording: %v", err)
 	}
 
@@ -590,7 +592,7 @@ func TestConcurrentPanels(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			name := fmt.Sprintf("panel-%d", n)
-			_ = c.AddPanel(ctx, name, "Title", 80)
+			_, _ = c.AddPanel(ctx, name, "Title", 80, nil)
 			_, _ = c.ListPanels(ctx)
 		}(i)
 	}

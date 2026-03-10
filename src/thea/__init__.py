@@ -1,6 +1,9 @@
 # Client (stdlib-only, always available)
 from .client import CompositionHelper, RecorderClient, RecorderError, RecordingResult
 
+# Layout (stdlib-only, always available)
+from .layout import Region, validate_regions, generate_testcard
+
 # Server components (require flask/click — installed via `pip install thea-recorder[server]`)
 try:
     from .recorder import Recorder, PANEL_HEIGHT, LINE_HEIGHT
@@ -12,6 +15,8 @@ except ImportError:
 __all__ = [
     # Client
     "RecorderClient", "RecorderError", "RecordingResult", "CompositionHelper",
+    # Layout
+    "Region", "validate_regions", "generate_testcard",
     # Server (available when [server] extra is installed)
     "Recorder", "PANEL_HEIGHT", "LINE_HEIGHT",
     "generate_report",

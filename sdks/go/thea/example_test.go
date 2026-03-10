@@ -89,7 +89,7 @@ func ExampleClient_WithPanel() {
 	client := thea.NewClient(ts.URL)
 	ctx := context.Background()
 
-	err := client.WithPanel(ctx, "code", "Code Panel", 80, func() error {
+	err := client.WithPanel(ctx, "code", "Code Panel", 80, nil, func() error {
 		panels, err := client.ListPanels(ctx)
 		if err != nil {
 			return err

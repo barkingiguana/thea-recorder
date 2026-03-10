@@ -22,7 +22,24 @@ export interface RecorderClientOptions {
 export interface AddPanelRequest {
   name: string;
   title: string;
-  width: number;
+  width?: number;
+  height?: number;
+}
+
+/** Response from POST /panels. */
+export interface AddPanelResponse {
+  warnings?: string[];
+}
+
+/** Response from POST /recording/start. */
+export interface StartRecordingResponse {
+  warnings?: string[];
+}
+
+/** Response from GET /validate-layout. */
+export interface ValidateLayoutResponse {
+  warnings: string[];
+  valid: boolean;
 }
 
 /** Body for PUT /panels/{name}. */
@@ -253,8 +270,8 @@ export class RecorderClient {
   // -----------------------------------------------------------------------
 
   /** Create a panel (POST /panels). */
-  async addPanel(panel: AddPanelRequest): Promise<void> {
-    await this.request("POST", "/panels", panel);
+  async addPanel(panel: AddPanelRequest): Promise<AddPanelResponse> {
+    return this.request<AddPanelResponse>("POST", "/panels", panel);
   }
 
   /** Update a panel's content (PUT /panels/{name}). */
@@ -277,8 +294,8 @@ export class RecorderClient {
   // -----------------------------------------------------------------------
 
   /** Start recording (POST /recording/start). */
-  async startRecording(name: string): Promise<void> {
-    await this.request("POST", "/recording/start", { name });
+  async startRecording(name: string): Promise<StartRecordingResponse> {
+    return this.request<StartRecordingResponse>("POST", "/recording/start", { name });
   }
 
   /** Stop recording (POST /recording/stop). */
@@ -466,6 +483,17 @@ export class RecorderClient {
     return this.request<HealthResponse>("GET", "/health");
   }
 
+  /** Validate the current panel layout (GET /validate-layout). */
+  async validateLayout(): Promise<ValidateLayoutResponse> {
+    return this.request<ValidateLayoutResponse>("GET", "/validate-layout");
+  }
+
+  /** Get an SVG test card for the current display (GET /testcard). */
+  async testcard(): Promise<string> {
+    const res = await this.request("GET", "/testcard", undefined, true);
+    return res.text();
+  }
+
   /** Clean up resources (POST /cleanup). */
   async cleanup(): Promise<void> {
     await this.request("POST", "/cleanup");
@@ -506,12 +534,23 @@ export class RecorderClient {
   async withPanel(
     name: string,
     title: string,
-    width: number,
-    fn: () => Promise<void>,
+    width?: number,
+    height?: number | (() => Promise<void>),
+    fn?: () => Promise<void>,
   ): Promise<void> {
-    await this.addPanel({ name, title, width });
+    // Support both (name, title, width, fn) and (name, title, width, height, fn).
+    let actualHeight: number | undefined;
+    let actualFn: () => Promise<void>;
+    if (typeof height === "function") {
+      actualFn = height;
+      actualHeight = undefined;
+    } else {
+      actualHeight = height;
+      actualFn = fn!;
+    }
+    await this.addPanel({ name, title, width, height: actualHeight });
     try {
-      await fn();
+      await actualFn();
     } finally {
       await this.removePanel(name).catch(() => {
         /* best-effort removal */

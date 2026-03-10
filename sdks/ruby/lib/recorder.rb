@@ -32,8 +32,11 @@ module Recorder
 
     # Panels
 
-    def add_panel(name:, title:, width:)
-      post("/panels", name: name, title: title, width: width)
+    def add_panel(name:, title:, width: nil, height: nil)
+      body = { name: name, title: title }
+      body[:width] = width if width
+      body[:height] = height if height
+      post("/panels", body)
     end
 
     def update_panel(name, text:, focus_line: nil)
@@ -50,8 +53,8 @@ module Recorder
       get("/panels")
     end
 
-    def with_panel(name, title:, width:)
-      add_panel(name: name, title: title, width: width)
+    def with_panel(name, title:, width: nil, height: nil)
+      add_panel(name: name, title: title, width: width, height: height)
       yield
     ensure
       remove_panel(name)
@@ -162,6 +165,16 @@ module Recorder
       end
 
       raise Error, "Composition not ready after #{timeout}s"
+    end
+
+    # Layout / Utility
+
+    def validate_layout
+      get("/validate-layout")
+    end
+
+    def testcard
+      raw_get("/testcard").body
     end
 
     # Health / Utility

@@ -20,6 +20,8 @@ import subprocess
 import tempfile
 import time
 
+from .layout import Region, generate_testcard, validate_regions
+
 logger = logging.getLogger("recorder")
 
 # Height of the info bar rendered below the application viewport.
@@ -99,7 +101,8 @@ class Recorder:
         self._ffmpeg_proc = None
         self._output_path = None
         self._recording_start = None
-        self._panels = {}  # name -> {"title": str, "path": str, "width": int|None}
+        self._allocated_bar_height = PANEL_HEIGHT
+        self._panels = {}  # name -> {"title": str, "path": str, "width": int|None, "height": int|None}
 
     # -- Display -----------------------------------------------------------
 
@@ -158,7 +161,31 @@ class Recorder:
 
     # -- Panels ------------------------------------------------------------
 
-    def add_panel(self, name: str, title: str = "", width: int = None):
+    @property
+    def panel_bar_height(self) -> int:
+        """Effective bar height based on panel configurations.
+
+        Returns the maximum of all explicit panel heights.  If no panel
+        specifies an explicit height, falls back to :data:`PANEL_HEIGHT`.
+        Returns ``0`` when there are no panels.
+        """
+        if not self._panels:
+            return 0
+        heights = []
+        for p in self._panels.values():
+            if p["height"] is not None:
+                heights.append(p["height"])
+            else:
+                heights.append(PANEL_HEIGHT)
+        return max(heights)
+
+    def add_panel(
+        self,
+        name: str,
+        title: str = "",
+        width: int = None,
+        height: int = None,
+    ) -> list[str]:
         """Register a named panel.
 
         Args:
@@ -166,6 +193,11 @@ class Recorder:
             title: Bold heading rendered above the panel content.
             width: Fixed width in pixels.  *None* means share the
                    remaining space equally with other auto-width panels.
+            height: Panel content height in pixels.  *None* means use the
+                   bar height (which defaults to :data:`PANEL_HEIGHT`).
+
+        Returns:
+            List of layout validation warnings (may be empty).
         """
         if name in self._panels:
             self._remove_panel_files(self._panels[name])
@@ -173,7 +205,8 @@ class Recorder:
         os.close(fd)
         with open(path, "w") as f:
             f.write("")
-        self._panels[name] = {"title": title, "path": path, "width": width}
+        self._panels[name] = {"title": title, "path": path, "width": width, "height": height}
+        return self.validate_layout()
 
     def remove_panel(self, name: str):
         """Remove a panel and delete its temp file. No-op if not present."""
@@ -194,7 +227,8 @@ class Recorder:
         if not panel:
             return
 
-        visible_lines = (PANEL_HEIGHT - 28) // LINE_HEIGHT
+        panel_h = panel["height"] if panel["height"] is not None else self.panel_bar_height or PANEL_HEIGHT
+        visible_lines = (panel_h - 28) // LINE_HEIGHT
         lines = text.split("\n")
 
         if len(lines) > visible_lines:
@@ -235,8 +269,13 @@ class Recorder:
             return 0.0
         return time.monotonic() - self._recording_start
 
-    def start_recording(self, filename: str):
-        """Begin ffmpeg recording of the virtual display."""
+    def start_recording(self, filename: str) -> list[str]:
+        """Begin ffmpeg recording of the virtual display.
+
+        Returns:
+            List of layout validation warnings (may be empty).
+        """
+        warnings = self.validate_layout()
         os.makedirs(self._output_dir, exist_ok=True)
         self._recording_start = time.monotonic()
 
@@ -247,7 +286,8 @@ class Recorder:
         w_int, h_int = int(w), int(h)
 
         if self._panels:
-            total_h = h_int + PANEL_HEIGHT
+            bar_h = min(self.panel_bar_height, self._allocated_bar_height)
+            total_h = h_int + bar_h
             vf = self._build_panel_filter(w_int, h_int)
             cmd = [
                 "ffmpeg", "-y",
@@ -289,6 +329,7 @@ class Recorder:
             stderr=subprocess.PIPE,
         )
         logger.debug("Recording started -> %s", self._output_path)
+        return warnings
 
     def _panel_layout(self, total_w: int):
         """Compute (name, panel, x, width) for each panel."""
@@ -309,6 +350,7 @@ class Recorder:
     def _build_panel_filter(self, w: int, h: int) -> str:
         """Build the ffmpeg -vf filter string for the panel bar."""
         bar_y = h
+        bar_h = min(self.panel_bar_height, self._allocated_bar_height)
         font = self._font
         font_bold = self._font_bold
 
@@ -316,7 +358,7 @@ class Recorder:
 
         parts = [
             # Dark background bar below the viewport
-            f"drawbox=x=0:y={bar_y}:w={w}:h={PANEL_HEIGHT}"
+            f"drawbox=x=0:y={bar_y}:w={w}:h={bar_h}"
             f":color=0x1a1a2e@1:t=fill",
             # Thin separator line at top of bar
             f"drawbox=x=0:y={bar_y}:w={w}:h=1"
@@ -327,7 +369,7 @@ class Recorder:
             # Vertical separator (skip first panel)
             if i > 0:
                 parts.append(
-                    f"drawbox=x={panel_x}:y={bar_y}:w=1:h={PANEL_HEIGHT}"
+                    f"drawbox=x={panel_x}:y={bar_y}:w=1:h={bar_h}"
                     f":color=0x30363d@1:t=fill"
                 )
 
@@ -365,6 +407,59 @@ class Recorder:
         )
 
         return ",".join(parts)
+
+    def _build_regions(self) -> tuple[int, int, list[Region]]:
+        """Build layout regions from the current panel configuration.
+
+        Returns:
+            (canvas_width, canvas_height, regions)
+        """
+        w, h = self._display_size.split("x")
+        w_int, h_int = int(w), int(h)
+        bar_h = self.panel_bar_height if self._panels else 0
+        canvas_h = h_int + bar_h
+
+        regions: list[Region] = [
+            Region("viewport", 0, 0, w_int, h_int, kind="app"),
+        ]
+
+        if self._panels:
+            for name, panel, x, pw in self._panel_layout(w_int):
+                regions.append(Region(name, x, h_int, pw, bar_h, kind="panel"))
+
+        return w_int, canvas_h, regions
+
+    def validate_layout(self) -> list[str]:
+        """Validate the current layout.
+
+        Checks for overlapping regions, regions exceeding the canvas,
+        and panel bar height exceeding the allocated display space.
+
+        Returns:
+            List of warning strings.  Empty means the layout is valid.
+        """
+        w_int, canvas_h, regions = self._build_regions()
+        warnings = validate_regions(w_int, canvas_h, regions)
+
+        bar_h = self.panel_bar_height
+        if bar_h > self._allocated_bar_height:
+            warnings.append(
+                f"Panel bar needs {bar_h}px but only "
+                f"{self._allocated_bar_height}px was allocated in the display. "
+                f"Recording will be capped at {self._allocated_bar_height}px."
+            )
+
+        return warnings
+
+    def generate_testcard(self) -> str:
+        """Generate an SVG testcard showing the current layout.
+
+        Returns:
+            SVG markup as a string.
+        """
+        w_int, canvas_h, regions = self._build_regions()
+        warnings = self.validate_layout()
+        return generate_testcard(w_int, canvas_h, regions, warnings=warnings)
 
     def stop_recording(self):
         """Stop ffmpeg gracefully and return the output path, or *None*."""

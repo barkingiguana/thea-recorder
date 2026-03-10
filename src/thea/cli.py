@@ -82,18 +82,29 @@ def _handle_connection_error(server: str):
 
 # ── Main group ───────────────────────────────────────────────────────────
 
+def _print_warnings(warnings, ignore):
+    """Print layout warnings to stderr unless ignored."""
+    if ignore or not warnings:
+        return
+    for w in warnings:
+        click.echo(f"Warning: {w}", err=True)
+
+
 @click.group()
 @click.option("--server", envvar="THEA_URL", default="http://localhost:9123",
               help="Recorder server URL (or set THEA_URL).")
 @click.option("--quiet", is_flag=True, default=False, help="Suppress output (exit code only).")
 @click.option("--pretty", is_flag=True, default=False, help="Pretty-print JSON output.")
+@click.option("--ignore-warnings", is_flag=True, default=False,
+              help="Suppress layout validation warnings.")
 @click.pass_context
-def main(ctx, server, quiet, pretty):
+def main(ctx, server, quiet, pretty, ignore_warnings):
     """Record Xvfb virtual displays as MP4 video with panel overlays."""
     ctx.ensure_object(dict)
     ctx.obj["server"] = server.rstrip("/")
     ctx.obj["quiet"] = quiet
     ctx.obj["pretty"] = pretty
+    ctx.obj["ignore_warnings"] = ignore_warnings
 
 
 # ── Server mode ──────────────────────────────────────────────────────────
@@ -165,13 +176,16 @@ def stop_display(ctx):
 @click.option("--name", required=True, help="Panel identifier.")
 @click.option("--title", default="", help="Panel heading.")
 @click.option("--width", default=None, type=int, help="Fixed width in pixels.")
+@click.option("--height", default=None, type=int, help="Panel height in pixels.")
 @click.pass_context
-def add_panel(ctx, name, title, width):
+def add_panel(ctx, name, title, width, height):
     """Add a named panel to the overlay bar."""
     server = _server_url(ctx)
     body = {"name": name, "title": title}
     if width is not None:
         body["width"] = width
+    if height is not None:
+        body["height"] = height
     try:
         status, data = _request(f"{server}/panels", method="POST", data=body)
     except (URLError, ConnectionError, OSError):
@@ -179,6 +193,7 @@ def add_panel(ctx, name, title, width):
     if status >= 400:
         click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
         sys.exit(1)
+    _print_warnings(data.get("warnings", []), ctx.obj["ignore_warnings"])
     _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
 
 
@@ -232,6 +247,7 @@ def start_recording(ctx, name):
     if status >= 400:
         click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
         sys.exit(1)
+    _print_warnings(data.get("warnings", []), ctx.obj["ignore_warnings"])
     _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
 
 
@@ -332,6 +348,49 @@ def cleanup(ctx):
 def version(ctx):
     """Print the recorder version."""
     _print_result({"version": "0.4.0"}, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+# ── Layout commands ──────────────────────────────────────────────────
+
+@main.command("validate-layout")
+@click.pass_context
+def validate_layout(ctx):
+    """Validate the current panel layout and print warnings."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/validate-layout")
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    warnings = data.get("warnings", [])
+    if warnings:
+        for w in warnings:
+            click.echo(f"Warning: {w}", err=True)
+    elif not ctx.obj["quiet"]:
+        click.echo("Layout is valid.", err=True)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("testcard")
+@click.option("--output", "-o", default=None, help="Write SVG to file instead of stdout.")
+@click.pass_context
+def testcard(ctx, output):
+    """Generate an SVG testcard of the current layout."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/testcard")
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if isinstance(data, bytes):
+        svg = data.decode("utf-8", errors="replace")
+    else:
+        svg = str(data)
+    if output:
+        with open(output, "w") as f:
+            f.write(svg)
+        if not ctx.obj["quiet"]:
+            click.echo(f"Testcard saved to {output}", err=True)
+    else:
+        click.echo(svg)
 
 
 # ── Composition commands ──────────────────────────────────────────────────
