@@ -1215,6 +1215,7 @@ footer {
         <li><a href="#sdks">SDKs</a></li>
         <li><a href="#examples">Examples</a></li>
         <li><a href="#report">Report</a></li>
+        <li><a href="#terminal">Terminal</a></li>
         <li><a href="#parallel">Parallel</a></li>
         <li><a href="#layout">Layout</a></li>
         <li><a href="docs/">Docs</a></li>
@@ -1687,7 +1688,7 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
             <div class="example-panel active" id="tab-behave">
                 <div class="code-content"><span class="cm"># features/environment.py — drop-in Behave integration</span>
 
-<span class="kw">from</span> <span class="fn">recorder</span> <span class="kw">import</span> Recorder, generate_report
+<span class="kw">from</span> <span class="fn">thea</span> <span class="kw">import</span> Recorder, generate_report
 
 <span class="kw">def</span> <span class="fn">before_all</span>(context):
     recorder <span class="op">=</span> Recorder(output_dir<span class="op">=</span><span class="str">"/app/recordings"</span>, display<span class="op">=</span><span class="fn">99</span>)
@@ -1978,6 +1979,196 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
     </div>
 </section>
 
+<!-- ═══ TERMINAL RECORDINGS ═══ -->
+<section class="beyond-section" id="terminal">
+    <div class="section-inner">
+        <div class="section-label">Terminal Recordings</div>
+        <h2>Record CLI tools. Not just browsers.</h2>
+        <p class="section-sub">
+            Launch xterm on the Thea virtual display, type commands with visible keystrokes using
+            xdotool, and narrate each step with panel overlays. The result is a polished MP4 demo
+            of any command-line tool &mdash; no screen recorder, no post-production.
+        </p>
+
+        <div class="code-block">
+            <div class="example-tabs">
+                <button class="example-tab active" onclick="showTermTab('record')">record_all.py</button>
+                <button class="example-tab" onclick="showTermTab('terminal')">terminal.py</button>
+                <button class="example-tab" onclick="showTermTab('demo')">quickstart.py</button>
+                <button class="example-tab" onclick="showTermTab('xresources')">Xresources</button>
+                <button class="example-tab" onclick="showTermTab('termdocker')">Dockerfile</button>
+            </div>
+
+            <div class="example-panel active" id="tab-record">
+                <div class="code-content"><span class="cm"># record_all.py &mdash; orchestrate terminal demos with Thea</span>
+
+<span class="kw">from</span> <span class="fn">thea</span> <span class="kw">import</span> Recorder, generate_report
+<span class="kw">from</span> <span class="fn">demos</span> <span class="kw">import</span> quickstart, verifications
+
+recorder <span class="op">=</span> Recorder(
+    output_dir<span class="op">=</span><span class="str">"./output"</span>,
+    display<span class="op">=</span><span class="fn">99</span>,
+    browser_size<span class="op">=</span><span class="str">"1280x1080"</span>,  <span class="cm"># terminal area (panels add 300px below)</span>
+    framerate<span class="op">=</span><span class="fn">24</span>,
+)
+
+<span class="cm"># Overlay panels: scene title + current step</span>
+recorder.add_panel(<span class="str">"scene"</span>, title<span class="op">=</span><span class="str">"Demo"</span>, width<span class="op">=</span><span class="fn">200</span>)
+recorder.add_panel(<span class="str">"step"</span>,  title<span class="op">=</span><span class="str">"Step"</span>)
+recorder.start_display()
+
+<span class="cm"># Record each demo as a separate MP4</span>
+<span class="kw">for</span> name, module <span class="kw">in</span> [(<span class="str">"quickstart"</span>, quickstart)]:
+    recorder.start_recording(name)
+    module.record(recorder)       <span class="cm"># drives xterm + updates panels</span>
+    recorder.stop_recording()
+
+recorder.cleanup()
+generate_report(videos, title<span class="op">=</span><span class="str">"CLI Demos"</span>)</div>
+            </div>
+
+            <div class="example-panel" id="tab-terminal">
+                <div class="code-content"><span class="cm"># demos/terminal.py &mdash; xdotool helpers for typed commands</span>
+
+<span class="kw">import</span> subprocess, time
+
+TYPE_DELAY_MS <span class="op">=</span> <span class="fn">40</span>    <span class="cm"># ms between keystrokes</span>
+PROMPT_PAUSE  <span class="op">=</span> <span class="fn">0.4</span>   <span class="cm"># pause before typing</span>
+RESULT_PAUSE  <span class="op">=</span> <span class="fn">1.5</span>   <span class="cm"># pause after output</span>
+
+<span class="kw">def</span> <span class="fn">launch_xterm</span>(geometry<span class="op">=</span><span class="str">"110x40"</span>):
+    <span class="str">"""Launch xterm fullscreen on the Xvfb display."""</span>
+    proc <span class="op">=</span> subprocess.Popen([
+        <span class="str">"xterm"</span>, <span class="str">"-fa"</span>, <span class="str">"JetBrains Mono"</span>, <span class="str">"-fs"</span>, <span class="str">"18"</span>,
+        <span class="str">"-bg"</span>, <span class="str">"#000000"</span>, <span class="str">"-fg"</span>, <span class="str">"#00ff00"</span>,
+        <span class="str">"-e"</span>, <span class="str">"bash"</span>, <span class="str">"--login"</span>,
+    ])
+    <span class="cm"># Wait for window, then maximize with xdotool</span>
+    wid <span class="op">=</span> _wait_for_window()
+    _maximize(wid)
+    <span class="kw">return</span> proc, wid
+
+<span class="kw">def</span> <span class="fn">type_text</span>(text, delay_ms<span class="op">=</span>TYPE_DELAY_MS):
+    subprocess.run([<span class="str">"xdotool"</span>, <span class="str">"type"</span>, <span class="str">"--delay"</span>, <span class="fn">str</span>(delay_ms), text])
+
+<span class="kw">def</span> <span class="fn">run_command</span>(cmd, pause_after<span class="op">=</span>RESULT_PAUSE):
+    <span class="str">"""Type a command, press Enter, wait for output."""</span>
+    time.sleep(PROMPT_PAUSE)
+    type_text(cmd)
+    subprocess.run([<span class="str">"xdotool"</span>, <span class="str">"key"</span>, <span class="str">"Return"</span>])
+    time.sleep(pause_after)</div>
+            </div>
+
+            <div class="example-panel" id="tab-demo">
+                <div class="code-content"><span class="cm"># demos/quickstart.py &mdash; a single demo script</span>
+
+<span class="kw">from</span> <span class="fn">demos.terminal</span> <span class="kw">import</span> launch_xterm, run_command, wait, clear_screen
+
+<span class="kw">def</span> <span class="fn">record</span>(client):
+    <span class="str">"""Run the quickstart demo on the Thea display."""</span>
+    client.update_panel(<span class="str">"scene"</span>, <span class="str">"Quickstart"</span>)
+    proc, wid <span class="op">=</span> launch_xterm()
+
+    <span class="kw">try</span>:
+        <span class="cm"># Step 1</span>
+        client.update_panel(<span class="str">"step"</span>, <span class="str">"1. Register a domain"</span>)
+        run_command(<span class="str">"dm domains add example.com"</span>, pause_after<span class="op">=</span><span class="fn">3</span>)
+
+        <span class="cm"># Step 2</span>
+        client.update_panel(<span class="str">"step"</span>, <span class="str">"2. Add a forwarding rule"</span>)
+        run_command(<span class="str">"dm rules add example.com hello you@gmail.com"</span>)
+
+        <span class="cm"># Step 3</span>
+        client.update_panel(<span class="str">"step"</span>, <span class="str">"3. List all rules"</span>)
+        run_command(<span class="str">"dm rules list"</span>, pause_after<span class="op">=</span><span class="fn">3</span>)
+
+        clear_screen()
+
+        <span class="cm"># Step 4</span>
+        client.update_panel(<span class="str">"step"</span>, <span class="str">"4. Activity log"</span>)
+        run_command(<span class="str">"dm rules log example.com hello"</span>, pause_after<span class="op">=</span><span class="fn">3</span>)
+
+        client.update_panel(<span class="str">"step"</span>, <span class="str">"Done!"</span>)
+        wait(<span class="fn">2</span>)
+    <span class="kw">finally</span>:
+        proc.terminate()</div>
+            </div>
+
+            <div class="example-panel" id="tab-xresources">
+                <div class="code-content"><span class="cm">! Xresources &mdash; style the xterm for recording</span>
+<span class="cm">! Classic green-on-black terminal look</span>
+
+XTerm*faceName:       JetBrains Mono
+XTerm*faceSize:       <span class="fn">18</span>
+XTerm*background:     <span class="str">#000000</span>
+XTerm*foreground:     <span class="str">#00ff00</span>
+XTerm*cursorColor:    <span class="str">#00ff00</span>
+XTerm*scrollBar:      false
+XTerm*internalBorder: <span class="fn">16</span>
+XTerm*termName:       xterm-256color
+XTerm*loginShell:     true
+XTerm*saveLines:      <span class="fn">5000</span>
+
+<span class="cm">! ANSI colours</span>
+XTerm*color0:   <span class="str">#000000</span>
+XTerm*color1:   <span class="str">#cc0000</span>
+XTerm*color2:   <span class="str">#00cc00</span>
+XTerm*color3:   <span class="str">#cccc00</span>
+XTerm*color10:  <span class="str">#55ff55</span>
+XTerm*color15:  <span class="str">#ffffff</span></div>
+            </div>
+
+            <div class="example-panel" id="tab-termdocker">
+                <div class="code-content"><span class="cm"># Dockerfile &mdash; everything needed for terminal recordings</span>
+<span class="kw">FROM</span> python:3.12-slim
+
+<span class="kw">RUN</span> apt-get update <span class="op">&&</span> apt-get install -qyy --no-install-recommends \
+    xvfb ffmpeg x11-xserver-utils xdotool xterm \
+    fonts-jetbrains-mono fonts-dejavu-core \
+    <span class="op">&&</span> rm -rf /var/lib/apt/lists/*
+
+<span class="kw">RUN</span> pip install --no-cache-dir thea-recorder
+
+<span class="cm"># xterm styling</span>
+<span class="kw">COPY</span> Xresources /root/.Xresources
+
+<span class="cm"># Your CLI tool + demo scripts</span>
+<span class="kw">COPY</span> demos/ demos/
+<span class="kw">COPY</span> record_all.py .
+
+<span class="kw">ENTRYPOINT</span> [<span class="str">"python"</span>, <span class="str">"record_all.py"</span>]
+
+<span class="cm"># Run with: docker compose up</span>
+<span class="cm"># Output: ./output/*.mp4 + report.html</span></div>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:1.5rem;margin-top:2.5rem;">
+            <div class="beyond-card">
+                <h4>Visible keystrokes</h4>
+                <p>
+                    xdotool types each character with a configurable delay.
+                    Viewers see commands appear letter-by-letter, just like a real terminal session.
+                </p>
+            </div>
+            <div class="beyond-card">
+                <h4>Panel narration</h4>
+                <p>
+                    Update overlay panels between steps to explain what's happening.
+                    The panel bar renders below the terminal viewport and is baked into the MP4.
+                </p>
+            </div>
+            <div class="beyond-card">
+                <h4>Mock APIs</h4>
+                <p>
+                    Run a mock HTTP server alongside the recording. The CLI talks to the mock,
+                    producing realistic output without needing real infrastructure.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- ═══ PARALLEL SESSIONS ═══ -->
 <section class="beyond-section" id="parallel">
     <div class="section-inner">
@@ -2258,6 +2449,15 @@ function showLayoutTab(name) {
     block.querySelectorAll('.example-tab').forEach(t => t.classList.remove('active'));
     block.querySelectorAll('.example-panel').forEach(p => p.classList.remove('active'));
     document.getElementById(name).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+
+function showTermTab(name) {
+    const id = 'tab-' + name;
+    const block = document.getElementById(id).closest('.code-block');
+    block.querySelectorAll('.example-tab').forEach(t => t.classList.remove('active'));
+    block.querySelectorAll('.example-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
     event.currentTarget.classList.add('active');
 }
 </script>
