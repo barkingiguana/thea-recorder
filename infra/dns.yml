@@ -1,0 +1,23 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Route 53 hosted zone for thearecorder.com
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: thearecorder.com
+
+Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref DomainName
+
+Outputs:
+  HostedZoneId:
+    Value: !Ref HostedZone
+    Description: Hosted zone ID (pass to site stack)
+    Export:
+      Name: !Sub "${AWS::StackName}-HostedZoneId"
+  NameServers:
+    Value: !Join [", ", !GetAtt HostedZone.NameServers]
+    Description: Set these as NS records at your domain registrar

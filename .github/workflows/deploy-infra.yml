@@ -1,0 +1,105 @@
+name: Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: >
+          Phase 1: DNS zone only (get NS records for registrar).
+          Phase 2: Full site stack with domain + TLS.
+        required: true
+        type: choice
+        options:
+          - "1-dns"
+          - "2-site"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1 # Required for ACM + CloudFront
+  STACK_PREFIX: thea-recorder
+  DOMAIN: thearecorder.com
+
+jobs:
+  deploy-dns:
+    name: "Phase 1: Deploy DNS Zone"
+    if: inputs.phase == '1-dns'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy DNS stack
+        run: |
+          aws cloudformation deploy \
+            --stack-name ${{ env.STACK_PREFIX }}-dns \
+            --template-file infra/dns.yml \
+            --parameter-overrides DomainName=${{ env.DOMAIN }} \
+            --no-fail-on-empty-changeset
+
+      - name: Show nameservers
+        run: |
+          echo "============================================"
+          echo "UPDATE THESE NS RECORDS AT YOUR REGISTRAR:"
+          echo "============================================"
+          aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-dns \
+            --query 'Stacks[0].Outputs[?OutputKey==`NameServers`].OutputValue' \
+            --output text
+          echo "============================================"
+          echo "Once NS records propagate, run Phase 2."
+
+  deploy-site:
+    name: "Phase 2: Deploy Site Stack"
+    if: inputs.phase == '2-site'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get hosted zone ID
+        id: dns
+        run: |
+          ZONE_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-dns \
+            --query 'Stacks[0].Outputs[?OutputKey==`HostedZoneId`].OutputValue' \
+            --output text)
+          echo "zone_id=$ZONE_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy site stack
+        run: |
+          aws cloudformation deploy \
+            --stack-name ${{ env.STACK_PREFIX }}-site \
+            --template-file infra/site.yml \
+            --parameter-overrides \
+              DomainName=${{ env.DOMAIN }} \
+              HostedZoneId=${{ steps.dns.outputs.zone_id }} \
+            --no-fail-on-empty-changeset
+
+      - name: Show outputs
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-site \
+            --query 'Stacks[0].Outputs' \
+            --output table
+
+      - name: Sync site content
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-site \
+            --query 'Stacks[0].Outputs[?OutputKey==`S3BucketName`].OutputValue' \
+            --output text)
+          DIST_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_PREFIX }}-site \
+            --query 'Stacks[0].Outputs[?OutputKey==`DistributionId`].OutputValue' \
+            --output text)
+          aws s3 sync site/ "s3://$BUCKET" --delete
+          aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*"

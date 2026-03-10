@@ -11,6 +11,10 @@ permissions:
   id-token: write
   contents: read
 
+env:
+  AWS_REGION: us-east-1
+  STACK_NAME: thea-recorder-site
+
 jobs:
   deploy:
     name: Deploy to S3
@@ -20,6 +24,21 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-southeast-2
-      - run: aws s3 sync site/ s3://${{ vars.S3_BUCKET_NAME }} --delete
-      - run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get stack outputs
+        id: stack
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`S3BucketName`].OutputValue' \
+            --output text)
+          DIST_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`DistributionId`].OutputValue' \
+            --output text)
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+          echo "dist_id=$DIST_ID" >> "$GITHUB_OUTPUT"
+
+      - run: aws s3 sync site/ s3://${{ steps.stack.outputs.bucket }} --delete
+      - run: aws cloudfront create-invalidation --distribution-id ${{ steps.stack.outputs.dist_id }} --paths "/*"
