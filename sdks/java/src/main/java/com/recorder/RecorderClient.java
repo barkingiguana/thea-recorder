@@ -72,9 +72,19 @@ public class RecorderClient implements AutoCloseable {
 
     // ── Display ──────────────────────────────────────────────────────────
 
-    /** Starts the virtual display. */
+    /** Starts the virtual display with the server's default resolution. */
     public void startDisplay() {
         post("/display/start", "", 201);
+    }
+
+    /**
+     * Starts the virtual display with a custom resolution.
+     *
+     * @param displaySize resolution override (e.g. "1920x1080")
+     */
+    public void startDisplay(String displaySize) {
+        var body = jsonObject(Map.of("display_size", jsonString(displaySize)));
+        post("/display/start", body, 201);
     }
 
     /** Stops the virtual display. */
@@ -287,6 +297,196 @@ public class RecorderClient implements AutoCloseable {
     public RecordingInfo recordingInfo(String name) {
         var json = get("/recordings/" + encode(name) + "/info", 200);
         return parseRecordingInfo(json);
+    }
+
+    // ── Sessions ─────────────────────────────────────────────────────────
+
+    /**
+     * Creates a new named recording session.
+     *
+     * @param name    session name
+     * @param display optional explicit X11 display number (-1 to auto-allocate)
+     * @return raw JSON response
+     */
+    public String createSession(String name, int display) {
+        var fields = new LinkedHashMap<String, String>();
+        fields.put("name", jsonString(name));
+        if (display >= 0) {
+            fields.put("display", String.valueOf(display));
+        }
+        return post("/sessions", jsonObject(fields), 201);
+    }
+
+    /** Creates a new named session with auto-allocated display. */
+    public String createSession(String name) {
+        return createSession(name, -1);
+    }
+
+    /**
+     * Returns a new client scoped to the named session.
+     *
+     * @param name session name (empty string for the default session)
+     * @return a session-scoped client
+     */
+    public RecorderClient useSession(String name) {
+        var prefix = (name == null || name.isEmpty()) ? "" : "/sessions/" + encode(name);
+        var child = new RecorderClient(baseUrl + prefix, timeout);
+        child.ready = true;
+        return child;
+    }
+
+    /**
+     * Deletes a named session.
+     *
+     * @param name session name
+     */
+    public void deleteSession(String name) {
+        delete("/sessions/" + encode(name), 200);
+    }
+
+    /**
+     * Lists all sessions.
+     *
+     * @return raw JSON array
+     */
+    public String listSessions() {
+        return get("/sessions", 200);
+    }
+
+    // ── Compositions ────────────────────────────────────────────────────
+
+    /**
+     * Creates a composition with default settings (row layout, labels on,
+     * no highlights, color "00d4aa", width 6).
+     *
+     * @param name       composition name
+     * @param recordings list of recording names to compose
+     * @return composition status
+     */
+    public CompositionStatus createComposition(String name, List<String> recordings) {
+        return createComposition(name, recordings, "row", true, List.of(), "00d4aa", 6);
+    }
+
+    /**
+     * Creates a composition with full options.
+     *
+     * @param name           composition name
+     * @param recordings     list of recording names to compose
+     * @param layout         layout type (e.g. "row", "column", "grid")
+     * @param labels         whether to show recording labels
+     * @param highlights     list of highlights to apply
+     * @param highlightColor highlight border color (hex without #)
+     * @param highlightWidth highlight border width in pixels
+     * @return composition status
+     */
+    public CompositionStatus createComposition(String name, List<String> recordings,
+                                                String layout, boolean labels,
+                                                List<CompositionHighlight> highlights,
+                                                String highlightColor, int highlightWidth) {
+        var recArray = new StringBuilder("[");
+        for (int i = 0; i < recordings.size(); i++) {
+            if (i > 0) recArray.append(",");
+            recArray.append(jsonString(recordings.get(i)));
+        }
+        recArray.append("]");
+
+        var hlArray = new StringBuilder("[");
+        for (int i = 0; i < highlights.size(); i++) {
+            if (i > 0) hlArray.append(",");
+            var h = highlights.get(i);
+            hlArray.append(jsonObject(new LinkedHashMap<>(Map.of(
+                    "recording", jsonString(h.recording()),
+                    "time", String.valueOf(h.time()),
+                    "duration", String.valueOf(h.duration())
+            ))));
+        }
+        hlArray.append("]");
+
+        var body = jsonObject(new LinkedHashMap<>(Map.of(
+                "name", jsonString(name),
+                "recordings", recArray.toString(),
+                "layout", jsonString(layout),
+                "labels", String.valueOf(labels),
+                "highlights", hlArray.toString(),
+                "highlight_color", jsonString(highlightColor),
+                "highlight_width", String.valueOf(highlightWidth)
+        )));
+        var json = post("/compositions", body, 201);
+        return parseCompositionStatus(json);
+    }
+
+    /**
+     * Gets the status of a composition.
+     *
+     * @param name composition name
+     * @return composition status
+     */
+    public CompositionStatus compositionStatus(String name) {
+        var json = get("/compositions/" + encode(name), 200);
+        return parseCompositionStatus(json);
+    }
+
+    /**
+     * Lists all compositions.
+     *
+     * @return raw JSON response
+     */
+    public String listCompositions() {
+        return get("/compositions", 200);
+    }
+
+    /**
+     * Deletes a composition.
+     *
+     * @param name composition name
+     */
+    public void deleteComposition(String name) {
+        delete("/compositions/" + encode(name), 200);
+    }
+
+    /**
+     * Adds a highlight to a composition.
+     *
+     * @param compositionName composition name
+     * @param recording       recording name to highlight
+     * @param time            start time in seconds
+     * @param duration        duration in seconds
+     */
+    public void addHighlight(String compositionName, String recording, double time, double duration) {
+        var body = jsonObject(new LinkedHashMap<>(Map.of(
+                "recording", jsonString(recording),
+                "time", String.valueOf(time),
+                "duration", String.valueOf(duration)
+        )));
+        post("/compositions/" + encode(compositionName) + "/highlights", body, 201);
+    }
+
+    /**
+     * Polls composition status until complete or failed.
+     *
+     * @param name      composition name
+     * @param timeoutMs maximum time to wait in milliseconds
+     * @return the final composition status
+     * @throws RecorderError if the composition fails or the timeout expires
+     */
+    public CompositionStatus waitForComposition(String name, long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < deadline) {
+            var status = compositionStatus(name);
+            if ("complete".equals(status.status())) {
+                return status;
+            }
+            if ("failed".equals(status.status())) {
+                throw new RecorderError("Composition failed: " + status.error());
+            }
+            try {
+                Thread.sleep(250);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RecorderError("Interrupted while waiting for composition", e);
+            }
+        }
+        throw new RecorderError("Composition not ready after " + timeoutMs + "ms");
     }
 
     // ── Health & Cleanup ─────────────────────────────────────────────────
@@ -650,6 +850,15 @@ public class RecorderClient implements AutoCloseable {
             ));
         }
         return panels;
+    }
+
+    private CompositionStatus parseCompositionStatus(String json) {
+        return new CompositionStatus(
+                jsonValue(json, "name"),
+                jsonValue(json, "status"),
+                jsonValue(json, "output_path"),
+                jsonValue(json, "error")
+        );
     }
 
     private List<RecordingInfo> parseRecordingInfoList(String json) {

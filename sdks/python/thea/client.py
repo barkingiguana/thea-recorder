@@ -41,6 +41,42 @@ class RecordingResult:
         return f"RecordingResult(name={self.name!r}, path={self.path!r}, elapsed={self.elapsed})"
 
 
+class CompositionHelper:
+    """Accumulates highlights for a composition being built.
+
+    Created by :meth:`RecorderClient.composed_recording`; not intended
+    to be instantiated directly.
+
+    Attributes
+    ----------
+    result:
+        Set to the final composition status dict after the context
+        manager exits.  *None* while the ``with`` block is running.
+    """
+
+    def __init__(self) -> None:
+        self.recording_start: float = time.monotonic()
+        self.highlights: list[dict[str, Any]] = []
+        self.result: dict[str, Any] | None = None
+
+    def highlight(self, recording: str, duration: float = 1.0) -> None:
+        """Record a timestamped highlight event.
+
+        Parameters
+        ----------
+        recording:
+            Name of the recording this highlight applies to.
+        duration:
+            Duration of the highlight in seconds.
+        """
+        elapsed = time.monotonic() - self.recording_start
+        self.highlights.append({
+            "recording": recording,
+            "time": elapsed,
+            "duration": duration,
+        })
+
+
 class RecorderClient:
     """Synchronous HTTP client for the thea-recorder server.
 
@@ -150,9 +186,19 @@ class RecorderClient:
     # Display
     # ------------------------------------------------------------------
 
-    def start_display(self) -> dict[str, Any]:
-        """POST /display/start — start the virtual display."""
-        return self._request("POST", "/display/start")
+    def start_display(self, display_size: str | None = None) -> dict[str, Any]:
+        """POST /display/start — start the virtual display.
+
+        Parameters
+        ----------
+        display_size:
+            Override the display resolution for this session (``WxH``).
+            *None* uses the server's default.
+        """
+        body: dict[str, Any] | None = None
+        if display_size is not None:
+            body = {"display_size": display_size}
+        return self._request("POST", "/display/start", body)
 
     def stop_display(self) -> dict[str, Any]:
         """POST /display/stop — stop the virtual display."""
@@ -261,7 +307,7 @@ class RecorderClient:
         """POST /sessions — create a new named recording session.
 
         Each session gets its own Xvfb display, ffmpeg process, and panel
-        set, so multiple browsers can be recorded fully independently from
+        set, so multiple applications can be recorded fully independently from
         a single server.
 
         Parameters
@@ -318,6 +364,211 @@ class RecorderClient:
         return []
 
     # ------------------------------------------------------------------
+    # Compositions
+    # ------------------------------------------------------------------
+
+    def create_composition(
+        self,
+        name: str,
+        recordings: list[str],
+        *,
+        layout: str = "row",
+        labels: bool = True,
+        highlights: list[dict[str, Any]] | None = None,
+        highlight_color: str = "00d4aa",
+        highlight_width: int = 6,
+    ) -> dict[str, Any]:
+        """POST /compositions — create a new composition.
+
+        Parameters
+        ----------
+        name:
+            Unique composition identifier.
+        recordings:
+            List of recording names to include.
+        layout:
+            Layout mode (e.g. ``"row"``).
+        labels:
+            Whether to show recording labels.
+        highlights:
+            Optional list of highlight dicts with keys
+            ``recording``, ``time``, ``duration``.
+        highlight_color:
+            Hex colour for highlight borders (without ``#``).
+        highlight_width:
+            Pixel width of highlight borders.
+
+        Returns
+        -------
+        dict
+            Parsed JSON response from the server.
+        """
+        body: dict[str, Any] = {
+            "name": name,
+            "recordings": recordings,
+            "layout": layout,
+            "labels": labels,
+            "highlight_color": highlight_color,
+            "highlight_width": highlight_width,
+        }
+        if highlights is not None:
+            body["highlights"] = highlights
+        return self._request("POST", "/compositions", body)
+
+    def add_highlight(
+        self,
+        composition_name: str,
+        recording: str,
+        time_: float,
+        duration: float = 1.0,
+    ) -> dict[str, Any]:
+        """POST /compositions/{name}/highlights — add a highlight.
+
+        Parameters
+        ----------
+        composition_name:
+            Name of the composition.
+        recording:
+            Name of the recording this highlight applies to.
+        time_:
+            Time offset in seconds.
+        duration:
+            Duration of the highlight in seconds.
+
+        Returns
+        -------
+        dict
+            Parsed JSON response from the server.
+        """
+        return self._request(
+            "POST",
+            f"/compositions/{composition_name}/highlights",
+            {"recording": recording, "time": time_, "duration": duration},
+        )
+
+    def composition_status(self, name: str) -> dict[str, Any]:
+        """GET /compositions/{name} — get composition status.
+
+        Returns
+        -------
+        dict
+            Parsed JSON response with composition details.
+        """
+        return self._request("GET", f"/compositions/{name}")
+
+    def list_compositions(self) -> list[dict[str, Any]]:
+        """GET /compositions — list all compositions.
+
+        Returns
+        -------
+        list
+            List of composition dicts.
+        """
+        result = self._request("GET", "/compositions")
+        if isinstance(result, list):
+            return result  # type: ignore[return-value]
+        return []
+
+    def wait_for_composition(
+        self,
+        name: str,
+        *,
+        timeout: float = 120.0,
+        interval: float = 1.0,
+    ) -> dict[str, Any]:
+        """Poll :meth:`composition_status` until complete or failed.
+
+        Parameters
+        ----------
+        name:
+            Composition name to poll.
+        timeout:
+            Maximum number of seconds to wait.
+        interval:
+            Seconds between poll attempts.
+
+        Returns
+        -------
+        dict
+            The final composition status dict.
+
+        Raises
+        ------
+        RecorderError
+            If the composition fails or *timeout* expires.
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            status = self.composition_status(name)
+            state = status.get("status")
+            if state == "complete":
+                return status
+            if state == "failed":
+                raise RecorderError(
+                    f"Composition {name!r} failed: {status.get('error', 'unknown error')}"
+                )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            time.sleep(min(interval, remaining))
+
+        raise RecorderError(
+            f"Composition {name!r} not ready after {timeout}s"
+        )
+
+    @contextmanager
+    def composed_recording(
+        self,
+        name: str,
+        recordings: list[str],
+        *,
+        layout: str = "row",
+        labels: bool = True,
+        highlight_color: str = "00d4aa",
+        highlight_width: int = 6,
+    ) -> Generator[CompositionHelper, None, None]:
+        """Context manager that creates a composition with accumulated highlights.
+
+        Usage::
+
+            with client.composed_recording("comp", ["rec1", "rec2"]) as comp:
+                comp.highlight("rec1", duration=2.0)
+                ...
+            print(comp.result)  # final composition status
+
+        On exit the composition is created with any recorded highlights,
+        then :meth:`wait_for_composition` is called to block until it
+        completes.
+
+        Parameters
+        ----------
+        name:
+            Unique composition identifier.
+        recordings:
+            List of recording names to include.
+        layout:
+            Layout mode (e.g. ``"row"``).
+        labels:
+            Whether to show recording labels.
+        highlight_color:
+            Hex colour for highlight borders (without ``#``).
+        highlight_width:
+            Pixel width of highlight borders.
+        """
+        helper = CompositionHelper()
+        yield helper
+        self.create_composition(
+            name,
+            recordings,
+            layout=layout,
+            labels=labels,
+            highlights=helper.highlights or None,
+            highlight_color=highlight_color,
+            highlight_width=highlight_width,
+        )
+        helper.result = self.wait_for_composition(name)
+
+    # ------------------------------------------------------------------
     # Convenience helpers
     # ------------------------------------------------------------------
 
@@ -370,7 +621,7 @@ class RecorderClient:
         Usage::
 
             with client.recording("demo") as result:
-                ...  # drive your browser here
+                ...  # drive your application here
             print(result.path)     # MP4 path on server
             print(result.elapsed)  # duration in seconds
 

@@ -21,8 +21,9 @@ module Recorder
 
     # Display
 
-    def start_display
-      post("/display/start")
+    def start_display(display_size: nil)
+      body = display_size ? { display_size: display_size } : nil
+      post("/display/start", body)
     end
 
     def stop_display
@@ -95,6 +96,72 @@ module Recorder
 
     def recording_info(name)
       get("/recordings/#{encode(name)}/info")
+    end
+
+    # Sessions
+
+    def create_session(name:, display: nil)
+      body = { name: name }
+      body[:display] = display if display
+      post("/sessions", body)
+    end
+
+    def use_session(name)
+      prefix = name.to_s.empty? ? "" : "/sessions/#{encode(name)}"
+      child = self.class.new("#{@base_url}#{prefix}", timeout: @timeout)
+      child.instance_variable_set(:@ready, true)
+      child
+    end
+
+    def delete_session(name)
+      delete("/sessions/#{encode(name)}")
+    end
+
+    def list_sessions
+      get("/sessions")
+    end
+
+    # Compositions
+
+    def create_composition(name:, recordings:, layout: "row", labels: true, highlights: [], highlight_color: "00d4aa", highlight_width: 6)
+      post("/compositions", name: name, recordings: recordings, layout: layout,
+           labels: labels, highlights: highlights, highlight_color: highlight_color,
+           highlight_width: highlight_width)
+    end
+
+    def add_highlight(composition_name:, recording:, time:, duration: 1.0)
+      post("/compositions/#{encode(composition_name)}/highlights",
+           recording: recording, time: time, duration: duration)
+    end
+
+    def composition_status(name:)
+      get("/compositions/#{encode(name)}")
+    end
+
+    def list_compositions
+      get("/compositions")
+    end
+
+    def delete_composition(name:)
+      delete("/compositions/#{encode(name)}")
+    end
+
+    def wait_for_composition(name:, timeout: 120, interval: 1.0)
+      deadline = Time.now + timeout
+      last_status = nil
+
+      while Time.now < deadline
+        last_status = composition_status(name: name)
+        case last_status["status"]
+        when "complete"
+          return last_status
+        when "failed"
+          raise Error, "Composition failed: #{last_status["error"]}"
+        end
+        sleep interval
+      end
+
+      raise Error, "Composition not ready after #{timeout}s"
     end
 
     # Health / Utility

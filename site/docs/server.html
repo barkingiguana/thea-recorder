@@ -85,9 +85,9 @@
             <tr><td><code>--port</code></td><td><code>9123</code></td><td>Port to listen on</td></tr>
             <tr><td><code>--display</code></td><td><code>99</code></td><td>X11 display number for Xvfb</td></tr>
             <tr><td><code>--output-dir</code></td><td><code>/tmp/recordings</code></td><td>Where MP4 files are saved</td></tr>
-            <tr><td><code>--browser-size</code></td><td><code>1920x1080</code></td><td>Virtual display resolution</td></tr>
+            <tr><td><code>--display-size</code></td><td><code>1920x1080</code></td><td>Application viewport resolution</td></tr>
             <tr><td><code>--framerate</code></td><td><code>15</code></td><td>Recording FPS</td></tr>
-            <tr><td><code>--cors</code></td><td>off</td><td>Enable CORS headers for browser access</td></tr>
+            <tr><td><code>--cors</code></td><td>off</td><td>Enable CORS headers</td></tr>
         </tbody>
     </table>
 
@@ -305,7 +305,7 @@
     <!-- ─── CORS ─── -->
     <h2 id="cors">CORS</h2>
 
-    <p>Enable CORS with <code>--cors</code> to allow browser-based dashboards to access recordings:</p>
+    <p>Enable CORS with <code>--cors</code> to allow web-based dashboards to access recordings:</p>
 
 <pre><code><span class="cmd">thea</span> serve <span class="flag">--port</span> <span class="val">9123</span> <span class="flag">--cors</span></code></pre>
 

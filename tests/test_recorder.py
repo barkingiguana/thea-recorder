@@ -76,7 +76,7 @@ class TestStartDisplay:
     @patch("recorder.recorder.os.path.exists", return_value=True)
     @patch("recorder.recorder.subprocess.Popen")
     def test_with_panels_adds_panel_height(self, mock_popen, _exists, _run):
-        r = Recorder(display=42, browser_size="1920x1080")
+        r = Recorder(display=42, display_size="1920x1080")
         r.add_panel("header", title="Header")
         r.start_display()
 
@@ -90,12 +90,13 @@ class TestStartDisplay:
     @patch("recorder.recorder.subprocess.run")
     @patch("recorder.recorder.os.path.exists", return_value=True)
     @patch("recorder.recorder.subprocess.Popen")
-    def test_without_panels_browser_height_only(self, mock_popen, _exists, _run):
-        r = Recorder(display=42, browser_size="1920x1080")
+    def test_without_panels_still_allocates_panel_height(self, mock_popen, _exists, _run):
+        r = Recorder(display=42, display_size="1920x1080")
         r.start_display()
 
         args = mock_popen.call_args[0][0]
-        assert "1920x1080x24" in args
+        expected_h = 1080 + PANEL_HEIGHT
+        assert f"1920x{expected_h}x24" in args
 
     @patch("recorder.recorder.subprocess.run")
     @patch("recorder.recorder.os.path.exists", return_value=True)
@@ -130,11 +131,12 @@ class TestStartDisplay:
     @patch("recorder.recorder.os.path.exists", return_value=True)
     @patch("recorder.recorder.subprocess.Popen")
     def test_custom_resolution(self, mock_popen, _exists, _run):
-        r = Recorder(display=1, browser_size="1280x720")
+        r = Recorder(display=1, display_size="1280x720")
         r.start_display()
 
         args = mock_popen.call_args[0][0]
-        assert "1280x720x24" in args
+        expected_h = 720 + PANEL_HEIGHT
+        assert f"1280x{expected_h}x24" in args
 
     @patch("recorder.recorder.subprocess.run")
     @patch("recorder.recorder.os.path.exists", return_value=True)
@@ -267,7 +269,7 @@ class TestPanels:
 
 class TestPanelLayout:
     def test_all_auto_width(self):
-        r = Recorder(browser_size="1920x1080")
+        r = Recorder(display_size="1920x1080")
         r.add_panel("alpha")
         r.add_panel("bravo")
         r.add_panel("charlie")
@@ -280,7 +282,7 @@ class TestPanelLayout:
         r.cleanup()
 
     def test_mixed_fixed_and_auto(self):
-        r = Recorder(browser_size="1920x1080")
+        r = Recorder(display_size="1920x1080")
         r.add_panel("sidebar", width=160)
         r.add_panel("main")
         layout = r._panel_layout(1920)
@@ -291,7 +293,7 @@ class TestPanelLayout:
         r.cleanup()
 
     def test_multiple_fixed_one_auto(self):
-        r = Recorder(browser_size="1920x1080")
+        r = Recorder(display_size="1920x1080")
         r.add_panel("left", width=160)
         r.add_panel("centre")
         r.add_panel("right", width=240)
@@ -364,7 +366,7 @@ class TestRecording:
 
     @patch("recorder.recorder.subprocess.Popen")
     def test_with_panels_video_size_includes_panel_height(self, mock_popen, tmp_path):
-        r = Recorder(output_dir=str(tmp_path), browser_size="1920x1080")
+        r = Recorder(output_dir=str(tmp_path), display_size="1920x1080")
         r.add_panel("banner")
         r.start_recording("test")
 
@@ -374,8 +376,8 @@ class TestRecording:
         r.cleanup()
 
     @patch("recorder.recorder.subprocess.Popen")
-    def test_without_panels_video_size_browser_only(self, mock_popen, tmp_path):
-        r = Recorder(output_dir=str(tmp_path), browser_size="1920x1080")
+    def test_without_panels_video_size_display_only(self, mock_popen, tmp_path):
+        r = Recorder(output_dir=str(tmp_path), display_size="1920x1080")
         r.start_recording("test")
 
         args = mock_popen.call_args[0][0]
@@ -394,6 +396,8 @@ class TestRecording:
     @patch("recorder.recorder.subprocess.Popen")
     def test_stop_recording_sends_q(self, mock_popen, tmp_path):
         proc = Mock()
+        proc.returncode = 0
+        proc.stderr = None
         mock_popen.return_value = proc
         r = Recorder(output_dir=str(tmp_path))
         r.start_recording("test")
@@ -410,7 +414,7 @@ class TestRecording:
 
     @patch("recorder.recorder.subprocess.Popen")
     def test_multiple_panels_filter_has_separators(self, mock_popen, tmp_path):
-        r = Recorder(output_dir=str(tmp_path), browser_size="1920x1080")
+        r = Recorder(output_dir=str(tmp_path), display_size="1920x1080")
         r.add_panel("first", title="First")
         r.add_panel("second", title="Second")
         r.add_panel("third", title="Third")
@@ -442,7 +446,7 @@ class TestRecording:
 
     @patch("recorder.recorder.subprocess.Popen")
     def test_fixed_width_panel_in_filter(self, mock_popen, tmp_path):
-        r = Recorder(output_dir=str(tmp_path), browser_size="1920x1080")
+        r = Recorder(output_dir=str(tmp_path), display_size="1920x1080")
         r.add_panel("sidebar", title="Sidebar", width=160)
         r.add_panel("detail", title="Detail")
         r.start_recording("test")
@@ -544,6 +548,8 @@ class TestCleanup:
     @patch("recorder.recorder.subprocess.Popen")
     def test_cleanup_stops_everything(self, mock_popen, _exists, _run, tmp_path):
         ffmpeg_proc = Mock()
+        ffmpeg_proc.returncode = 0
+        ffmpeg_proc.stderr = None
         xvfb_proc = Mock()
         mock_popen.side_effect = [xvfb_proc, ffmpeg_proc]
 

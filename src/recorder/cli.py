@@ -80,7 +80,7 @@ def _handle_connection_error(server: str):
 @click.option("--pretty", is_flag=True, default=False, help="Pretty-print JSON output.")
 @click.pass_context
 def main(ctx, server, quiet, pretty):
-    """Record E2E tests as MP4 video with panel overlays."""
+    """Record Xvfb virtual displays as MP4 video with panel overlays."""
     ctx.ensure_object(dict)
     ctx.obj["server"] = server.rstrip("/")
     ctx.obj["quiet"] = quiet
@@ -90,39 +90,46 @@ def main(ctx, server, quiet, pretty):
 # ── Server mode ──────────────────────────────────────────────────────────
 
 @main.command()
+@click.option("--host", default="0.0.0.0", envvar="THEA_HOST", help="Host to bind to.")
 @click.option("--port", default=9123, type=int, help="Port to listen on.")
 @click.option("--display", default=99, type=int, help="X11 display number.")
 @click.option("--output-dir", default="/tmp/recordings", help="Video output directory.")
-@click.option("--browser-size", default="1920x1080", help="Browser viewport size (WxH).")
+@click.option("--default-display-size", default="1920x1080", envvar="THEA_DISPLAY_SIZE",
+              help="Default display resolution for new sessions (WxH).")
 @click.option("--framerate", default=15, type=int, help="Recording framerate (fps).")
 @click.option("--cors", is_flag=True, default=False, help="Enable CORS headers.")
-def serve(port, display, output_dir, browser_size, framerate, cors):
+def serve(host, port, display, output_dir, default_display_size, framerate, cors):
     """Start the recorder HTTP server."""
     from .server import create_app
 
     app = create_app(
         output_dir=output_dir,
         display=display,
-        browser_size=browser_size,
+        display_size=default_display_size,
         framerate=framerate,
         enable_cors=cors,
     )
-    click.echo(f"Thea recorder server starting on http://0.0.0.0:{port}")
+    click.echo(f"Thea recorder server starting on http://{host}:{port}")
     click.echo(f"  Display: :{display}  Output: {output_dir}  FPS: {framerate}")
+    click.echo(f"  Default resolution: {default_display_size}")
     if cors:
         click.echo("  CORS: enabled")
-    app.run(host="0.0.0.0", port=port, threaded=True)
+    app.run(host=host, port=port, threaded=True)
 
 
 # ── Display commands ─────────────────────────────────────────────────────
 
 @main.command("start-display")
+@click.option("--display-size", default=None, help="Override display resolution (WxH) for this session.")
 @click.pass_context
-def start_display(ctx):
+def start_display(ctx, display_size):
     """Start the Xvfb virtual display."""
     server = _server_url(ctx)
+    body = {}
+    if display_size is not None:
+        body["display_size"] = display_size
     try:
-        status, data = _request(f"{server}/display/start", method="POST")
+        status, data = _request(f"{server}/display/start", method="POST", data=body or None)
     except (URLError, ConnectionError, OSError):
         _handle_connection_error(server)
     if status >= 400:
@@ -318,6 +325,115 @@ def version(ctx):
     _print_result({"version": "0.3.0"}, ctx.obj["quiet"], ctx.obj["pretty"])
 
 
+# ── Composition commands ──────────────────────────────────────────────────
+
+@main.command("compose")
+@click.option("--name", required=True, help="Name for the composed video.")
+@click.option("--recordings", required=True, help="Comma-separated list of recording names.")
+@click.option("--layout", default="row", type=click.Choice(["row", "column", "grid"]),
+              help="Tile layout.")
+@click.option("--labels/--no-labels", default=True, help="Show recording names on each tile.")
+@click.option("--highlight", "highlights", multiple=True,
+              help="Highlight event as 'recording:time:duration' (repeatable).")
+@click.option("--highlight-color", default="00d4aa", help="Hex colour for highlight border.")
+@click.option("--highlight-width", default=6, type=int, help="Highlight border width in pixels.")
+@click.option("--wait/--no-wait", default=True, help="Wait for composition to finish.")
+@click.pass_context
+def compose(ctx, name, recordings, layout, labels, highlights, highlight_color, highlight_width, wait):
+    """Compose multiple recordings into a single side-by-side video.
+
+    \b
+    Example — two recordings side by side:
+      thea compose --name demo --recordings user_1,user_2
+
+    \b
+    Example — with highlight borders:
+      thea compose --name demo --recordings alice,bob \\
+        --highlight alice:3.5:2.0 --highlight bob:6.0:1.5
+    """
+    server = _server_url(ctx)
+    recording_list = [r.strip() for r in recordings.split(",") if r.strip()]
+
+    # Parse highlight flags.
+    parsed_highlights = []
+    for h in highlights:
+        parts = h.split(":")
+        if len(parts) < 2:
+            click.echo(f"Error: highlight '{h}' must be 'recording:time' or 'recording:time:duration'", err=True)
+            sys.exit(1)
+        rec = parts[0]
+        t = float(parts[1])
+        dur = float(parts[2]) if len(parts) > 2 else 1.0
+        parsed_highlights.append({"recording": rec, "time": t, "duration": dur})
+
+    body = {
+        "name": name,
+        "recordings": recording_list,
+        "layout": layout,
+        "labels": labels,
+        "highlights": parsed_highlights,
+        "highlight_color": highlight_color,
+        "highlight_width": highlight_width,
+    }
+
+    try:
+        status, data = _request(f"{server}/compositions", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+
+    if not wait:
+        _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+        return
+
+    # Poll until complete.
+    import time as _time
+    while True:
+        _time.sleep(1)
+        try:
+            status, data = _request(f"{server}/compositions/{name}")
+        except (URLError, ConnectionError, OSError):
+            _handle_connection_error(server)
+        if data.get("status") in ("complete", "failed"):
+            break
+
+    if data.get("status") == "failed":
+        click.echo(f"Error: composition failed — {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("compose-status")
+@click.option("--name", required=True, help="Composition name.")
+@click.pass_context
+def compose_status(ctx, name):
+    """Check the status of a composition."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/compositions/{name}")
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("list-compositions")
+@click.pass_context
+def list_compositions(ctx):
+    """List all compositions."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/compositions")
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
 # ── Parallel mode ─────────────────────────────────────────────────────────
 
 @main.command("multi")
@@ -329,16 +445,16 @@ def version(ctx):
               help="X11 display for the first instance; subsequent instances use base+1, base+2, …")
 @click.option("--output-dir", default="/tmp/recordings", show_default=True,
               help="Shared MP4 output directory.")
-@click.option("--browser-size", default="1920x1080", show_default=True,
-              help="Browser viewport size (WxH).")
+@click.option("--default-display-size", default="1920x1080", show_default=True,
+              envvar="THEA_DISPLAY_SIZE", help="Default display resolution for new sessions (WxH).")
 @click.option("--framerate", default=15, type=int, show_default=True,
               help="Recording framerate (fps).")
 @click.option("--cors", is_flag=True, default=False, help="Enable CORS headers on all instances.")
-def multi(instances, base_port, base_display, output_dir, browser_size, framerate, cors):
-    """Start N independent recorder servers for parallel browser sessions.
+def multi(instances, base_port, base_display, output_dir, default_display_size, framerate, cors):
+    """Start N independent recorder servers for parallel sessions.
 
-    Each instance gets its own port and Xvfb display so browsers run
-    completely independently.  Point each browser at the matching
+    Each instance gets its own port and Xvfb display so applications run
+    completely independently.  Point each application at the matching
     DISPLAY and connect your SDK to the matching port.
 
     \b
@@ -363,7 +479,7 @@ def multi(instances, base_port, base_display, output_dir, browser_size, framerat
             "--port", str(port),
             "--display", str(display),
             "--output-dir", output_dir,
-            "--browser-size", browser_size,
+            "--default-display-size", default_display_size,
             "--framerate", str(framerate),
         ]
         if cors:

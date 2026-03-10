@@ -72,6 +72,34 @@ export interface HealthResponse {
   uptime: number;
 }
 
+/** A highlight within a composition. */
+export interface CompositionHighlight {
+  recording: string;
+  time: number;
+  duration?: number;
+}
+
+/** Body for POST /compositions. */
+export interface CreateCompositionRequest {
+  name: string;
+  recordings: string[];
+  layout?: "row" | "column" | "grid";
+  labels?: boolean;
+  highlights?: CompositionHighlight[];
+  highlight_color?: string;
+  highlight_width?: number;
+}
+
+/** Response from composition endpoints. */
+export interface CompositionStatus {
+  name: string;
+  status: "pending" | "rendering" | "complete" | "failed";
+  recordings: string[];
+  output_path?: string;
+  output_size?: number;
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Error
 // ---------------------------------------------------------------------------
@@ -210,8 +238,9 @@ export class RecorderClient {
   // -----------------------------------------------------------------------
 
   /** Start the virtual display (POST /display/start). */
-  async startDisplay(): Promise<void> {
-    await this.request("POST", "/display/start");
+  async startDisplay(displaySize?: string): Promise<void> {
+    const body = displaySize ? { display_size: displaySize } : undefined;
+    await this.request("POST", "/display/start", body);
   }
 
   /** Stop the virtual display (POST /display/stop). */
@@ -316,6 +345,115 @@ export class RecorderClient {
     return this.request<RecordingInfo>(
       "GET",
       `/recordings/${encodeURIComponent(name)}/info`,
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Sessions
+  // -----------------------------------------------------------------------
+
+  /** Create a named session (POST /sessions). */
+  async createSession(
+    name: string,
+    display?: number,
+  ): Promise<{ name: string; display: number; url_prefix: string }> {
+    const body: Record<string, unknown> = { name };
+    if (display !== undefined) body.display = display;
+    return this.request("POST", "/sessions", body);
+  }
+
+  /**
+   * Return a new client whose requests are scoped to the named session.
+   * Pass an empty string to target the default session.
+   */
+  useSession(name: string): RecorderClient {
+    const prefix = name ? `/sessions/${encodeURIComponent(name)}` : "";
+    const child = new RecorderClient({
+      url: `${this.baseUrl}${prefix}`,
+      timeout: this.timeout,
+    });
+    // Skip readiness check — parent already verified.
+    child.readyPromise = Promise.resolve();
+    return child;
+  }
+
+  /** Delete a named session (DELETE /sessions/{name}). */
+  async deleteSession(name: string): Promise<void> {
+    await this.request("DELETE", `/sessions/${encodeURIComponent(name)}`);
+  }
+
+  /** List all sessions (GET /sessions). */
+  async listSessions(): Promise<unknown[]> {
+    return this.request<unknown[]>("GET", "/sessions");
+  }
+
+  // -----------------------------------------------------------------------
+  // Compositions
+  // -----------------------------------------------------------------------
+
+  /** Create a composition (POST /compositions). */
+  async createComposition(
+    req: CreateCompositionRequest,
+  ): Promise<CompositionStatus> {
+    return this.request<CompositionStatus>("POST", "/compositions", req);
+  }
+
+  /** Get composition status (GET /compositions/{name}). */
+  async compositionStatus(name: string): Promise<CompositionStatus> {
+    return this.request<CompositionStatus>(
+      "GET",
+      `/compositions/${encodeURIComponent(name)}`,
+    );
+  }
+
+  /** List all compositions (GET /compositions). */
+  async listCompositions(): Promise<CompositionStatus[]> {
+    return this.request<CompositionStatus[]>("GET", "/compositions");
+  }
+
+  /** Delete a composition (DELETE /compositions/{name}). */
+  async deleteComposition(name: string): Promise<void> {
+    await this.request(
+      "DELETE",
+      `/compositions/${encodeURIComponent(name)}`,
+    );
+  }
+
+  /** Add a highlight to a composition (POST /compositions/{name}/highlights). */
+  async addHighlight(
+    compositionName: string,
+    highlight: CompositionHighlight,
+  ): Promise<void> {
+    await this.request(
+      "POST",
+      `/compositions/${encodeURIComponent(compositionName)}/highlights`,
+      highlight,
+    );
+  }
+
+  /**
+   * Poll composition status until complete or failed, or timeout expires.
+   *
+   * @param name Composition name.
+   * @param options.timeout Max wait time in milliseconds (default 300 000).
+   * @param options.interval Poll interval in milliseconds (default 1 000).
+   */
+  async waitForComposition(
+    name: string,
+    options?: { timeout?: number; interval?: number },
+  ): Promise<CompositionStatus> {
+    const timeout = options?.timeout ?? 300_000;
+    const interval = options?.interval ?? 1_000;
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      const status = await this.compositionStatus(name);
+      if (status.status === "complete" || status.status === "failed") {
+        return status;
+      }
+      await new Promise((r) => setTimeout(r, interval));
+    }
+    throw new RecorderError(
+      `Composition "${name}" not ready after ${timeout}ms`,
     );
   }
 

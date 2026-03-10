@@ -32,6 +32,7 @@ def generate_report(
     title: str = "Test Report",
     subtitle: str = "Automated test recordings",
     logo_text: str = "R",
+    output_path: str = None,
 ):
     """Write an HTML report with embedded video players and step timelines.
 
@@ -43,11 +44,13 @@ def generate_report(
         title: Report heading.
         subtitle: Text below the heading.
         logo_text: Single character shown in the logo badge.
+        output_path: Explicit path for the report file.  *None* writes
+            ``report.html`` inside *output_dir*.
 
     Returns:
         Path to the generated report HTML file.
     """
-    report_path = os.path.join(output_dir, "report.html")
+    report_path = output_path or os.path.join(output_dir, "report.html")
     os.makedirs(output_dir, exist_ok=True)
 
     passed = sum(1 for v in videos if v["status"] == "passed")

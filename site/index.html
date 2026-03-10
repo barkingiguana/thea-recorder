@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>thea-recorder — Record your E2E tests. Watch them back.</title>
-<meta name="description" content="Capture E2E browser tests as MP4 video with live panel overlays and interactive HTML reports. Minimal dependencies, easy install.">
+<title>thea-recorder — Record your virtual display. Watch it back.</title>
+<meta name="description" content="Record anything running in Xvfb as MP4 video with live panel overlays and interactive HTML reports. Browsers, GUI apps, terminal sessions, anything with a window.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -1207,7 +1207,7 @@ footer {
         <li><a href="#report">Report</a></li>
         <li><a href="#parallel">Parallel</a></li>
         <li><a href="docs/">Docs</a></li>
-        <li><a href="https://github.com/BarkingIguana/thea-recorder" class="nav-pip">pip install thea-recorder</a></li>
+        <li><a href="https://github.com/BarkingIguana/thea" class="nav-pip">pip install thea-recorder</a></li>
     </ul>
 </nav>
 
@@ -1216,15 +1216,16 @@ footer {
     <div class="hero-inner">
         <div class="hero-text">
             <div class="hero-badge">Recording</div>
-            <h1>Record your E2E&nbsp;tests.<br><em>Watch them back.</em></h1>
+            <h1>Record your virtual&nbsp;display.<br><em>Watch it back.</em></h1>
             <p class="hero-sub">
-                Capture browser tests as MP4 video with live panel overlays.
-                Minimal dependencies, easy install. SDKs for Python, Ruby, Go, TypeScript, Node, and Java.
+                Capture anything running in Xvfb as MP4 video with live panel overlays.
+                Browsers, GUI apps, terminal sessions &mdash; anything with a window.
+                SDKs for Python, Ruby, Go, TypeScript, Node, and Java.
                 Generate interactive HTML reports where clicking a step seeks the video
                 to that exact moment.
             </p>
             <div class="hero-actions">
-                <a href="https://github.com/BarkingIguana/thea-recorder" class="btn-primary">
+                <a href="https://github.com/BarkingIguana/thea" class="btn-primary">
                     View on GitHub
                 </a>
                 <a href="#examples" class="btn-ghost">See examples</a>
@@ -1252,7 +1253,7 @@ client <span class="op">=</span> RecorderClient(<span class="str">"http://localh
 client.start_display()
 
 <span class="kw">with</span> client.recording(<span class="str">"login_test"</span>):
-    <span class="cm"># run your browser test</span>
+    <span class="cm"># run your application</span>
     <span class="kw">pass</span>
 
 client.download_recording(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div></div>
@@ -1260,7 +1261,7 @@ client.download_recording(<span class="str">"login_test"</span>, <span class="st
 client.start_display
 
 client.<span class="fn">recording</span>(<span class="str">"login_test"</span>) <span class="kw">do</span>
-  <span class="cm"># run your browser test</span>
+  <span class="cm"># run your application</span>
 <span class="kw">end</span>
 
 client.download_recording(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div></div>
@@ -1269,7 +1270,7 @@ client.<span class="fn">StartDisplay</span>(ctx)
 
 stop, _ <span class="op">:=</span> client.<span class="fn">Recording</span>(ctx, <span class="str">"login_test"</span>)
 <span class="kw">defer</span> <span class="fn">stop</span>()
-<span class="cm">// run your browser test</span>
+<span class="cm">// run your application</span>
 
 client.<span class="fn">DownloadRecordingToFile</span>(ctx, <span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div></div>
                 <div class="hero-lang-panel" id="hero-ts"><div class="terminal-body"><span class="kw">import</span> { RecorderClient } <span class="kw">from</span> <span class="str">"thea-recorder"</span>;
@@ -1280,7 +1281,7 @@ client.<span class="fn">DownloadRecordingToFile</span>(ctx, <span class="str">"l
 <span class="kw">await</span> client.<span class="fn">startDisplay</span>();
 
 <span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () <span class="op">=></span> {
-  <span class="cm">// run your Playwright test</span>
+  <span class="cm">// run your application</span>
 });
 
 <span class="kw">await</span> client.<span class="fn">downloadRecordingToFile</span>(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>);</div></div>
@@ -1290,7 +1291,7 @@ client.<span class="fn">DownloadRecordingToFile</span>(ctx, <span class="str">"l
 <span class="kw">await</span> client.<span class="fn">startDisplay</span>();
 
 <span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () <span class="op">=></span> {
-  <span class="cm">// run your browser test</span>
+  <span class="cm">// run your application</span>
 });
 
 <span class="kw">await</span> client.<span class="fn">downloadRecordingToFile</span>(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>);</div></div>
@@ -1327,9 +1328,9 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
 <section class="why-section" id="why">
     <div class="section-inner">
         <div class="section-label">The Problem</div>
-        <h2>E2E failures are a black box</h2>
+        <h2>Failures are a black box</h2>
         <p class="section-sub">
-            Your browser was right there doing the thing. You just weren't watching.
+            The screen was right there doing the thing. You just weren't watching.
         </p>
 
         <div class="why-grid">
@@ -1397,7 +1398,7 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
                 <div class="feature-icon">&#9638;</div>
                 <h4>Panel overlay system</h4>
                 <p>
-                    Named columns below the browser viewport with live-updating text.
+                    Named columns below the application viewport with live-updating text.
                     Fixed or auto-width layout. Smart scrolling keeps the active line visible.
                 </p>
             </div>
@@ -1475,10 +1476,10 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
                     <text class="sk-sub" x="52" y="76">Go · Py · Ruby · TS · Node</text>
                     <text class="sk-label" x="78" y="98">Test Suite</text>
 
-                    <!-- Your App / Browser box -->
+                    <!-- Your App box -->
                     <rect class="sk-box" x="30" y="155" width="185" height="58" rx="5"/>
                     <text class="sk-label" x="62" y="180">Your App</text>
-                    <text class="sk-sub" x="62" y="198">browser on :99</text>
+                    <text class="sk-sub" x="62" y="198">on DISPLAY :99</text>
 
                     <!-- Arrow: Test Suite → App -->
                     <path class="sk-arrow" d="M122,113 L122,155"/>
@@ -1557,7 +1558,7 @@ client <span class="op">=</span> RecorderClient(<span class="str">"http://localh
 client.start_display()
 
 <span class="kw">with</span> client.recording(<span class="str">"login_test"</span>):
-    <span class="cm"># run your browser test</span>
+    <span class="cm"># run your application</span>
     <span class="kw">pass</span>
 
 client.download_recording(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div>
@@ -1570,7 +1571,7 @@ client <span class="op">=</span> Recorder::Client.new(<span class="str">"http://
 client.start_display
 
 client.recording(<span class="str">"login_test"</span>) <span class="kw">do</span>
-  <span class="cm"># run your browser test</span>
+  <span class="cm"># run your application</span>
 <span class="kw">end</span>
 
 client.download_recording(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div>
@@ -1582,7 +1583,7 @@ client.<span class="fn">StartDisplay</span>(ctx)
 
 stop, _ <span class="op">:=</span> client.<span class="fn">Recording</span>(ctx, <span class="str">"login_test"</span>)
 <span class="kw">defer</span> <span class="fn">stop</span>()
-<span class="cm">// run your browser test</span>
+<span class="cm">// run your application</span>
 
 client.<span class="fn">DownloadRecordingToFile</span>(ctx, <span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div>
             </div>
@@ -1596,7 +1597,7 @@ client.<span class="fn">DownloadRecordingToFile</span>(ctx, <span class="str">"l
 <span class="kw">await</span> client.<span class="fn">startDisplay</span>();
 
 <span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () <span class="op">=></span> {
-  <span class="cm">// run your Playwright test</span>
+  <span class="cm">// run your application</span>
 });
 
 <span class="kw">await</span> client.<span class="fn">downloadRecordingToFile</span>(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>);</div>
@@ -1609,7 +1610,7 @@ client.<span class="fn">DownloadRecordingToFile</span>(ctx, <span class="str">"l
 <span class="kw">await</span> client.<span class="fn">startDisplay</span>();
 
 <span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () <span class="op">=></span> {
-  <span class="cm">// run your browser test</span>
+  <span class="cm">// run your application</span>
 });
 
 <span class="kw">await</span> client.<span class="fn">downloadRecordingToFile</span>(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>);</div>
@@ -1901,7 +1902,7 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
                 <p>
                     QA can communicate issues effectively by sharing documented video evidence
                     of both successes and failures. No need to reproduce bugs or explain what happened
-                    — the recording shows exactly what the browser did.
+                    — the recording shows exactly what the screen did.
                 </p>
             </div>
             <div class="beyond-card">
@@ -1917,7 +1918,7 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
                 <p>
                     Product managers want to see features working, not test output.
                     Recordings are proof that the sprint deliverables actually function
-                    in a real browser.
+                    on a real screen.
                 </p>
             </div>
             <div class="beyond-card">
@@ -1932,7 +1933,7 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
                 <h4>Scripted product demos</h4>
                 <p>
                     You don't need a test framework. Write a Python script that drives
-                    a browser, narrates each scene in the overlay panel, and produces a
+                    an application, narrates each scene in the overlay panel, and produces a
                     polished MP4. Ship a fresh demo video with every release — no
                     presenter required.
                 </p>
@@ -1982,7 +1983,7 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
     client.<span class="fn">add_panel</span>(<span class="str">"status"</span>, title=<span class="str">"Status"</span>)
 
     <span class="kw">with</span> client.<span class="fn">recording</span>(<span class="str">f"user_{user_id}_checkout"</span>) <span class="kw">as</span> result:
-        <span class="cm"># drive this user's browser independently…</span>
+        <span class="cm"># drive this user's session independently…</span>
         client.<span class="fn">update_panel</span>(<span class="str">"status"</span>, <span class="str">"Checking out"</span>)
 
     <span class="fn">print</span>(result.path, result.elapsed)
@@ -2033,7 +2034,7 @@ curl -X POST http://localhost:9123/sessions/alice/recording/start \
 curl -X POST http://localhost:9123/sessions/bob/recording/start \
   -d <span class="str">'{"name":"bob_checkout"}'</span>
 
-<span class="cm"># … both browsers record independently …</span>
+<span class="cm"># … both sessions record independently …</span>
 
 curl -X POST http://localhost:9123/sessions/alice/recording/stop
 curl -X POST http://localhost:9123/sessions/bob/recording/stop
@@ -2051,12 +2052,12 @@ curl -X DELETE http://localhost:9123/sessions/bob</div>
             <span class="nav-rec"></span>
             <span class="footer-name">thea-recorder</span>
         </div>
-        <p class="footer-tagline">Record your E2E tests. Watch them back.</p>
+        <p class="footer-tagline">Record your virtual display. Watch it back.</p>
         <div class="footer-links">
-            <a href="https://github.com/BarkingIguana/thea-recorder">GitHub</a>
-            <a href="https://github.com/BarkingIguana/thea-recorder#install">Install</a>
-            <a href="https://github.com/BarkingIguana/thea-recorder#api">API Docs</a>
-            <a href="https://github.com/BarkingIguana/thea-recorder/blob/main/LICENSE">MIT License</a>
+            <a href="https://github.com/BarkingIguana/thea">GitHub</a>
+            <a href="https://github.com/BarkingIguana/thea#install">Install</a>
+            <a href="https://github.com/BarkingIguana/thea#api">API Docs</a>
+            <a href="https://github.com/BarkingIguana/thea/blob/main/LICENSE">MIT License</a>
         </div>
         <p class="footer-copy">Built by Mechanical Rock. Open source under the MIT License.</p>
     </div>

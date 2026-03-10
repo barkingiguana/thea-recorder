@@ -1,7 +1,7 @@
 """HTTP server wrapping one or more named Recorder sessions.
 
 Each session has its own Xvfb display, ffmpeg process, and panel set —
-browsers in different sessions are completely isolated from each other.
+applications in different sessions are completely isolated from each other.
 
 A *default* session is created at startup using the configured display
 number.  Additional sessions can be created dynamically via the REST API.
@@ -25,6 +25,7 @@ from functools import wraps
 
 from flask import Flask, Response, jsonify, request, send_file
 
+from .composer import CompositionManager, CompositionSpec, Highlight
 from .recorder import Recorder
 
 logger = logging.getLogger("recorder.server")
@@ -33,7 +34,7 @@ logger = logging.getLogger("recorder.server")
 def create_app(
     output_dir: str = "/tmp/recordings",
     display: int = 99,
-    browser_size: str = "1920x1080",
+    display_size: str = "1920x1080",
     framerate: int = 15,
     enable_cors: bool = False,
 ) -> Flask:
@@ -58,7 +59,7 @@ def create_app(
             "recorder": Recorder(
                 output_dir=output_dir,
                 display=display_num,
-                browser_size=browser_size,
+                display_size=display_size,
                 framerate=framerate,
             ),
             "lock": threading.Lock(),
@@ -124,10 +125,12 @@ def create_app(
     # called from both the default routes and the /sessions/<name>/... routes.
 
     def _impl_display_start(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        req_display_size = data.get("display_size")
         with sess_lock:
             if rec._xvfb_proc is not None:
                 return jsonify({"error": "display already started"}), 409
-            rec.start_display()
+            rec.start_display(display_size=req_display_size)
             return jsonify({"status": "started", "display": rec.display_string}), 201
 
     def _impl_display_stop(rec, sess_lock):
@@ -151,8 +154,10 @@ def create_app(
         title = data.get("title", "")
         width = data.get("width")
         if width is not None:
-            if not isinstance(width, int) or width <= 0:
-                return jsonify({"error": "field 'width' must be a positive integer"}), 400
+            if not isinstance(width, int):
+                return jsonify({"error": "field 'width' must be an integer"}), 400
+            if width <= 0:
+                width = None  # treat zero/negative as auto-width
         with sess_lock:
             rec.add_panel(name, title=title, width=width)
         return jsonify({"name": name, "title": title, "width": width}), 201
@@ -522,6 +527,115 @@ def create_app(
     @app.route("/cleanup", methods=["POST"])
     def cleanup():
         return _impl_cleanup(recorder, lock, current_recording_name)
+
+    # ── Composition endpoints ─────────────────────────────────────────────
+
+    _composer = CompositionManager(output_dir)
+
+    @app.route("/compositions", methods=["POST"])
+    def compositions_create():
+        """Create and render a composed video from multiple recordings."""
+        data = request.get_json(silent=True) or {}
+
+        name = data.get("name")
+        if not name or not isinstance(name, str) or name.strip() == "":
+            return jsonify({"error": "field 'name' is required and must be a non-empty string"}), 400
+
+        recordings = data.get("recordings")
+        if not recordings or not isinstance(recordings, list) or len(recordings) < 1:
+            return jsonify({"error": "field 'recordings' must be a non-empty list of recording names"}), 400
+
+        for rec_name in recordings:
+            if not isinstance(rec_name, str) or not rec_name.strip():
+                return jsonify({"error": "each recording name must be a non-empty string"}), 400
+
+        layout = data.get("layout", "row")
+        if layout not in ("row", "column", "grid"):
+            return jsonify({"error": "field 'layout' must be 'row', 'column', or 'grid'"}), 400
+
+        labels = data.get("labels", True)
+        highlight_color = data.get("highlight_color", "00d4aa")
+        highlight_width = data.get("highlight_width", 6)
+
+        # Parse inline highlights.
+        highlights = []
+        for h in data.get("highlights", []):
+            rec = h.get("recording")
+            t = h.get("time")
+            dur = h.get("duration", 1.0)
+            if not rec or t is None:
+                return jsonify({"error": "each highlight needs 'recording' and 'time'"}), 400
+            highlights.append(Highlight(recording=rec, time=float(t), duration=float(dur)))
+
+        spec = CompositionSpec(
+            name=name,
+            recordings=recordings,
+            layout=layout,
+            labels=bool(labels),
+            highlights=highlights,
+            highlight_color=str(highlight_color),
+            highlight_width=int(highlight_width),
+        )
+
+        try:
+            result = _composer.create(spec)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 409
+
+        return jsonify(result.to_dict()), 202
+
+    @app.route("/compositions", methods=["GET"])
+    def compositions_list():
+        """List all compositions."""
+        return jsonify(_composer.list_all()), 200
+
+    @app.route("/compositions/<comp_name>", methods=["GET"])
+    def compositions_get(comp_name):
+        """Get composition status."""
+        got = _composer.get(comp_name)
+        if got is None:
+            return jsonify({"error": f"composition '{comp_name}' not found"}), 404
+        spec, result = got
+        return jsonify({**result.to_dict(), **spec.to_dict()}), 200
+
+    @app.route("/compositions/<comp_name>", methods=["DELETE"])
+    def compositions_delete(comp_name):
+        """Delete a composition."""
+        if _composer.delete(comp_name):
+            return jsonify({"status": "removed"}), 200
+        return jsonify({"error": f"composition '{comp_name}' not found"}), 404
+
+    @app.route("/compositions/<comp_name>/highlights", methods=["POST"])
+    def compositions_add_highlight(comp_name):
+        """Add a highlight event to a composition."""
+        data = request.get_json(silent=True) or {}
+        rec = data.get("recording")
+        t = data.get("time")
+        dur = data.get("duration", 1.0)
+        if not rec or t is None:
+            return jsonify({"error": "fields 'recording' and 'time' are required"}), 400
+        try:
+            _composer.add_highlight(
+                comp_name, Highlight(recording=rec, time=float(t), duration=float(dur)),
+            )
+        except KeyError:
+            return jsonify({"error": f"composition '{comp_name}' not found"}), 404
+        return jsonify({"status": "added"}), 201
+
+    @app.route("/compositions/<comp_name>/highlights", methods=["GET"])
+    def compositions_list_highlights(comp_name):
+        """List highlights for a composition."""
+        got = _composer.get(comp_name)
+        if got is None:
+            return jsonify({"error": f"composition '{comp_name}' not found"}), 404
+        spec, _ = got
+        return jsonify([
+            {"recording": h.recording, "time": h.time, "duration": h.duration}
+            for h in spec.highlights
+        ]), 200
+
+    # Expose for testing
+    app._composer = _composer
 
     # -- Graceful shutdown -------------------------------------------------
 

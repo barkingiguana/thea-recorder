@@ -1,12 +1,12 @@
-# Test Framework Integration Guide
+# Integration Guide
 
-How to integrate the recorder into your existing test framework. Each example shows the complete setup: start server, record scenarios, update panels during steps, download recordings, and generate reports.
+How to integrate the recorder into your existing workflow. Each example shows the complete setup: start server, record sessions, update panels during steps, download recordings, and generate reports. While the examples below focus on test frameworks, thea works with any application that runs in an Xvfb display — GUI apps, desktop automation scripts, product demos, etc.
 
 ## Architecture
 
 ```
 ┌──────────────┐     HTTP      ┌──────────────────┐
-│  Test Suite   │ ──────────── │  Recorder Server  │
+│ Application   │ ──────────── │  Recorder Server  │
 │  (any lang)   │   SDK calls  │  (thea serve) │
 └──────────────┘               └──────┬───────────┘
                                       │
@@ -21,7 +21,7 @@ How to integrate the recorder into your existing test framework. Each example sh
                                └──────────────────┘
 ```
 
-Your test suite connects to the server via an SDK. The server manages the virtual display and recording. Videos and reports are written to the output directory.
+Your application connects to the server via an SDK. The server manages the virtual display and recording. Videos and reports are written to the output directory.
 
 ## Prerequisites
 
@@ -311,5 +311,5 @@ class LoginTest {
 - **Auto-ready is built in** — the SDK automatically waits for the server on the first API call, so you don't need to call `wait_until_ready()` yourself. The method still exists if you want explicit control.
 - **Use the `recording()` helper** instead of manual start/stop — it handles cleanup on test failure.
 - **Update panels in step hooks** for the best video debugging experience.
-- **Set `--shm-size=2g`** or higher in Docker — Chrome and Xvfb need shared memory.
+- **Set `--shm-size=2g`** or higher in Docker — Xvfb and some applications need shared memory.
 - **Mount a volume** for the recordings directory so you can access videos after the container exits.

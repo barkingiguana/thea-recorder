@@ -1,8 +1,8 @@
 # Orchestration: Demos and Parallel Sessions
 
 thea-recorder isn't only for E2E test suites.  Any time you need a scripted
-browser session captured to video, it works — product demos, release
-walkthroughs, compliance evidence, or simulating multiple concurrent users.
+session captured to video, it works — product demos, release walkthroughs,
+GUI app recordings, compliance evidence, or simulating multiple concurrent users.
 
 ## Recording a product demo
 
@@ -41,7 +41,7 @@ Full example: [`examples/product_demo.py`](../examples/product_demo.py)
 | Audience | What they get |
 |---|---|
 | Sales & marketing | Always-fresh product walkthrough, no presenter required |
-| Stakeholders | Sprint demo that actually shows the browser, not slides |
+| Stakeholders | Sprint demo that actually shows the app running, not slides |
 | New hires | Video onboarding — watch what the app does, step by step |
 | Compliance / audit | Timestamped evidence of manual verification steps |
 
@@ -75,13 +75,13 @@ jobs:
 
 ## Parallel recordings — simulating multiple users
 
-Some scenarios need more than one browser at a time: collaborative features,
+Some scenarios need more than one application at a time: collaborative features,
 real-time data sync, multi-tenant workflows, or simulating 2–3 concurrent
 users to make a demo more compelling.
 
 A **single** recorder server manages any number of parallel sessions.
 Each session has its own Xvfb display, its own ffmpeg recording process,
-and its own set of overlay panels — browsers in different sessions are
+and its own set of overlay panels — applications in different sessions are
 completely isolated from each other.
 
 ### Session API overview
@@ -123,13 +123,13 @@ def user_session(user_id):
         client.update_panel("user",   f"User {user_id}")
         client.update_panel("status", "Logging in…")
 
-        # Launch your browser pointed at this session's display, e.g.:
+        # Launch your application pointed at this session's display, e.g.:
         #   display = f":{client.create_session(session_name)['display']}"
         #   os.environ["DISPLAY"] = display
-        #   driver = webdriver.Chrome()
+        #   driver = webdriver.Chrome()  # or any windowed app
 
         with client.recording(f"session_user_{user_id}") as result:
-            # ... browser automation for this user ...
+            # ... drive your application here ...
             pass
 
         print(f"[user {user_id}] {result.path}  ({result.elapsed:.1f}s)")

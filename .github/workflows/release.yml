@@ -49,6 +49,21 @@ jobs:
       - run: uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
 
+  python-sdk:
+    name: Publish Python SDK to PyPI
+    needs: version-check
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: cd sdks/python && uv build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdks/python/dist/
+
   go:
     name: Publish Go SDK
     needs: version-check

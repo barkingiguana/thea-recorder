@@ -48,8 +48,11 @@ Non-zero exit code on any error.
 ### Display
 
 ```bash
-# Start the virtual display
+# Start the virtual display (uses server's default resolution)
 thea start-display
+
+# Start with a custom resolution
+thea start-display --display-size 1280x720
 
 # Stop the virtual display
 thea stop-display

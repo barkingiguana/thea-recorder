@@ -1,8 +1,9 @@
 """Video recording via Xvfb + ffmpeg with a panel-based overlay.
 
-When enabled, Chrome runs non-headless on a virtual framebuffer (Xvfb).
-ffmpeg captures the display to MP4 and renders an info bar below the
-browser viewport with named panels arranged as columns.
+Any windowed application (browser, GUI app, desktop automation) runs on
+a virtual framebuffer (Xvfb).  ffmpeg captures the display to MP4 and
+renders an info bar below the application viewport with named panels
+arranged as columns.
 
 Panels with an explicit *width* (pixels) are allocated first; the
 remaining space is shared equally among panels with no width set.
@@ -21,7 +22,7 @@ import time
 
 logger = logging.getLogger("recorder")
 
-# Height of the info bar rendered below the browser viewport.
+# Height of the info bar rendered below the application viewport.
 PANEL_HEIGHT = 300
 
 # Line height for panel text: 14pt font + 4px line_spacing.
@@ -64,7 +65,7 @@ class Recorder:
     Args:
         output_dir: Where MP4 files are saved.
         display: X11 display number (99 -> ``:99``).
-        browser_size: Browser viewport resolution (``WxH``).
+        display_size: Application viewport resolution (``WxH``).
         framerate: Recording framerate (fps).
         font: Path to a regular-weight TTF font for panel content.
             *None* searches for a suitable monospace font on the system.
@@ -76,14 +77,14 @@ class Recorder:
         self,
         output_dir: str = "/tmp/recordings",
         display: int = 99,
-        browser_size: str = "1920x1080",
+        display_size: str = "1920x1080",
         framerate: int = 15,
         font: str = None,
         font_bold: str = None,
     ):
         self._output_dir = output_dir
         self._display = display
-        self._browser_size = browser_size
+        self._display_size = display_size
         self._framerate = framerate
 
         if font is None or font_bold is None:
@@ -107,13 +108,20 @@ class Recorder:
         """X11 display identifier, e.g. ``:99``."""
         return f":{self._display}"
 
-    def start_display(self):
-        """Launch Xvfb on the configured display number."""
-        w, h = self._browser_size.split("x")
-        if self._panels:
-            total_h = int(h) + PANEL_HEIGHT
-        else:
-            total_h = int(h)
+    def start_display(self, display_size: str = None):
+        """Launch Xvfb on the configured display number.
+
+        Args:
+            display_size: Override the display resolution for this session
+                (``WxH``).  *None* uses the default set at construction.
+        """
+        if display_size is not None:
+            self._display_size = display_size
+        w, h = self._display_size.split("x")
+        # Always allocate space for the panel bar so panels can be added
+        # after the display has started without causing ffmpeg capture
+        # failures (the panel bar region is just black when unused).
+        total_h = int(h) + PANEL_HEIGHT
         cmd = [
             "Xvfb", self.display_string,
             "-screen", "0", f"{w}x{total_h}x24",
@@ -235,7 +243,7 @@ class Recorder:
         safe = re.sub(r"[^\w\-.]", "_", filename)[:120]
         self._output_path = os.path.join(self._output_dir, f"{safe}.mp4")
 
-        w, h = self._browser_size.split("x")
+        w, h = self._display_size.split("x")
         w_int, h_int = int(w), int(h)
 
         if self._panels:
@@ -278,7 +286,7 @@ class Recorder:
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
         )
         logger.debug("Recording started -> %s", self._output_path)
 
@@ -373,6 +381,21 @@ class Recorder:
                 self._ffmpeg_proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 self._ffmpeg_proc.kill()
+
+        returncode = self._ffmpeg_proc.returncode
+        stderr_output = b""
+        if self._ffmpeg_proc.stderr:
+            try:
+                stderr_output = self._ffmpeg_proc.stderr.read()
+            except Exception:
+                pass
+        if returncode and returncode != 0:
+            stderr_text = stderr_output.decode("utf-8", errors="replace").strip()
+            logger.warning(
+                "ffmpeg exited with code %d for %s: %s",
+                returncode, self._output_path,
+                stderr_text[-2000:] if stderr_text else "(no stderr)",
+            )
 
         path = self._output_path
         self._ffmpeg_proc = None

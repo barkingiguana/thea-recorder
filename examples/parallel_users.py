@@ -23,7 +23,7 @@ THEA_URL = os.environ.get("THEA_URL", "http://localhost:9123")
 # ── Per-user scenario ──────────────────────────────────────────────────────
 
 def user_session(user_id: int):
-    """Drive one browser in its own isolated session."""
+    """Drive one application in its own isolated session."""
     session_name = f"user_{user_id}"
     client = RecorderClient(THEA_URL)
 
@@ -38,10 +38,10 @@ def user_session(user_id: int):
         client.update_panel("user",   f"User {user_id}")
         client.update_panel("status", "Initialising…")
 
-        # In a real script, launch a browser against the session's display:
+        # In a real script, launch your application against the session's display:
         #   display = client.session_display()       # e.g. ":100"
         #   os.environ["DISPLAY"] = display
-        #   driver = webdriver.Chrome()
+        #   # e.g. webdriver.Chrome(), subprocess.Popen(["xterm"]), etc.
 
         with client.recording(f"scenario_user_{user_id}") as result:
             # Stagger start times so the recording shows independent pacing

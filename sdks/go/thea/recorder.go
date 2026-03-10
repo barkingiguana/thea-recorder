@@ -77,6 +77,35 @@ type RecordingInfo struct {
 	Created string  `json:"created"`
 }
 
+// CompositionHighlight describes a highlight applied to a recording within a
+// composition.
+type CompositionHighlight struct {
+	Recording string  `json:"recording"`
+	Time      float64 `json:"time"`
+	Duration  float64 `json:"duration"`
+}
+
+// CompositionRequest is the payload for POST /compositions.
+type CompositionRequest struct {
+	Name           string                 `json:"name"`
+	Recordings     []string               `json:"recordings"`
+	Layout         string                 `json:"layout,omitempty"`
+	Labels         bool                   `json:"labels"`
+	Highlights     []CompositionHighlight `json:"highlights,omitempty"`
+	HighlightColor string                 `json:"highlight_color,omitempty"`
+	HighlightWidth int                    `json:"highlight_width,omitempty"`
+}
+
+// CompositionStatus is the payload returned by composition endpoints.
+type CompositionStatus struct {
+	Name       string   `json:"name"`
+	Status     string   `json:"status"`
+	Recordings []string `json:"recordings"`
+	OutputPath string   `json:"output_path,omitempty"`
+	OutputSize int64    `json:"output_size,omitempty"`
+	Error      string   `json:"error,omitempty"`
+}
+
 // ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
@@ -123,8 +152,13 @@ func (c *Client) BaseURL() string {
 // ---------------------------------------------------------------------------
 
 // StartDisplay starts the virtual display (POST /display/start).
-func (c *Client) StartDisplay(ctx context.Context) error {
-	return c.doSimple(ctx, http.MethodPost, "/display/start", nil, http.StatusCreated)
+// An optional displaySize (e.g. "1920x1080") overrides the server default.
+func (c *Client) StartDisplay(ctx context.Context, displaySize ...string) error {
+	var body map[string]any
+	if len(displaySize) > 0 && displaySize[0] != "" {
+		body = map[string]any{"display_size": displaySize[0]}
+	}
+	return c.doSimple(ctx, http.MethodPost, "/display/start", body, http.StatusCreated)
 }
 
 // StopDisplay stops the virtual display (POST /display/stop).
@@ -283,6 +317,128 @@ func (c *Client) Recording(ctx context.Context, name string) (stop func() (*Reco
 	return func() (*RecordingResult, error) {
 		return c.StopRecording(ctx)
 	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// Sessions
+// ---------------------------------------------------------------------------
+
+// SessionInfo is returned by session management endpoints.
+type SessionInfo struct {
+	Name          string `json:"name"`
+	Display       int    `json:"display"`
+	URLPrefix     string `json:"url_prefix,omitempty"`
+	Recording     bool   `json:"recording,omitempty"`
+	RecordingName string `json:"recording_name,omitempty"`
+}
+
+// CreateSession creates a new named recording session (POST /sessions).
+func (c *Client) CreateSession(ctx context.Context, name string, display ...int) (*SessionInfo, error) {
+	body := map[string]any{"name": name}
+	if len(display) > 0 {
+		body["display"] = display[0]
+	}
+	var info SessionInfo
+	if err := c.doJSON(ctx, http.MethodPost, "/sessions", body, http.StatusCreated, &info); err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
+// UseSession returns a new Client whose requests are scoped to the named
+// session. Call with "" to target the default session.
+func (c *Client) UseSession(name string) *Client {
+	prefix := ""
+	if name != "" {
+		prefix = "/sessions/" + name
+	}
+	return &Client{
+		baseURL:    c.baseURL + prefix,
+		httpClient: c.httpClient,
+	}
+}
+
+// DeleteSession removes a named session (DELETE /sessions/{name}).
+func (c *Client) DeleteSession(ctx context.Context, name string) error {
+	return c.doSimple(ctx, http.MethodDelete, "/sessions/"+name, nil, http.StatusOK)
+}
+
+// ListSessions returns all active sessions (GET /sessions).
+func (c *Client) ListSessions(ctx context.Context) ([]SessionInfo, error) {
+	var list []SessionInfo
+	if err := c.doJSON(ctx, http.MethodGet, "/sessions", nil, http.StatusOK, &list); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// ---------------------------------------------------------------------------
+// Compositions
+// ---------------------------------------------------------------------------
+
+// CreateComposition creates a new composition (POST /compositions).
+func (c *Client) CreateComposition(ctx context.Context, req CompositionRequest) (*CompositionStatus, error) {
+	var status CompositionStatus
+	if err := c.doJSON(ctx, http.MethodPost, "/compositions", req, http.StatusCreated, &status); err != nil {
+		return nil, err
+	}
+	return &status, nil
+}
+
+// CompositionStatus returns the status of a composition
+// (GET /compositions/{name}).
+func (c *Client) CompositionStatus(ctx context.Context, name string) (*CompositionStatus, error) {
+	var status CompositionStatus
+	if err := c.doJSON(ctx, http.MethodGet, "/compositions/"+name, nil, http.StatusOK, &status); err != nil {
+		return nil, err
+	}
+	return &status, nil
+}
+
+// ListCompositions returns all compositions (GET /compositions).
+func (c *Client) ListCompositions(ctx context.Context) ([]CompositionStatus, error) {
+	var list []CompositionStatus
+	if err := c.doJSON(ctx, http.MethodGet, "/compositions", nil, http.StatusOK, &list); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// DeleteComposition deletes a composition (DELETE /compositions/{name}).
+func (c *Client) DeleteComposition(ctx context.Context, name string) error {
+	return c.doSimple(ctx, http.MethodDelete, "/compositions/"+name, nil, http.StatusOK)
+}
+
+// AddHighlight adds a highlight to a composition
+// (POST /compositions/{name}/highlights).
+func (c *Client) AddHighlight(ctx context.Context, compositionName string, h CompositionHighlight) error {
+	return c.doSimple(ctx, http.MethodPost, "/compositions/"+compositionName+"/highlights", h, http.StatusCreated)
+}
+
+// WaitForComposition polls the composition status until it reaches "complete"
+// or "failed", or the timeout elapses.
+func (c *Client) WaitForComposition(ctx context.Context, name string, timeout time.Duration) (*CompositionStatus, error) {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		status, err := c.CompositionStatus(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		if status.Status == "complete" || status.Status == "failed" {
+			return status, nil
+		}
+		if time.Now().After(deadline) {
+			return status, fmt.Errorf("recorder: composition %q not finished after %s (status: %s)", name, timeout, status.Status)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------

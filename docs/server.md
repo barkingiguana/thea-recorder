@@ -15,9 +15,9 @@ recorder serve --port 9123 --output-dir ./recordings --display 99
 | `--port` | `9123` | Port to listen on |
 | `--display` | `99` | X11 display number for Xvfb |
 | `--output-dir` | `/tmp/recordings` | Where MP4 files are saved |
-| `--browser-size` | `1920x1080` | Virtual display resolution |
+| `--display-size` | `1920x1080` | Application viewport resolution |
 | `--framerate` | `15` | Recording FPS |
-| `--cors` | off | Enable CORS headers for browser access |
+| `--cors` | off | Enable CORS headers |
 
 ### Docker
 
@@ -38,6 +38,12 @@ All endpoints return JSON unless noted. Error responses use `{"error": "message"
 ```bash
 curl -X POST http://localhost:9123/display/start
 ```
+
+Optional body to override display resolution for this session:
+```json
+{"display_size": "1280x720"}
+```
+
 **Response** `201`:
 ```json
 {"status": "started", "display": ":99"}
@@ -235,7 +241,7 @@ This means `docker stop` will not lose a recording in progress.
 
 ## CORS
 
-Enable CORS with `--cors` to allow browser-based dashboards to access recordings:
+Enable CORS with `--cors` to allow web-based dashboards to access recordings:
 
 ```bash
 recorder serve --port 9123 --cors
@@ -264,7 +270,7 @@ Example:
 
 A single server can manage any number of independent recording sessions.  Each
 session has its own Xvfb virtual display, ffmpeg process, and panel set.  This
-lets you record 2–3 concurrent browser sessions without running multiple servers.
+lets you record multiple concurrent sessions without running multiple servers.
 
 ### Create a session
 

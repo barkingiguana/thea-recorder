@@ -1,4 +1,4 @@
-"""Drop-in Behave environment.py for recording E2E tests.
+"""Drop-in Behave environment.py for recording test scenarios.
 
 Copy this file to your features/environment.py and customise the panels
 and authenticator setup for your application. The recording hooks handle

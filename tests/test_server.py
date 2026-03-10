@@ -117,14 +117,15 @@ class TestPanels:
         resp = client.post("/panels", json={"name": ""})
         assert resp.status_code == 400
 
-    def test_create_panel_invalid_width(self, client):
-        resp = client.post("/panels", json={"name": "bad", "width": -5})
-        assert resp.status_code == 400
-        assert "width" in resp.get_json()["error"]
+    def test_create_panel_negative_width_treated_as_auto(self, client):
+        resp = client.post("/panels", json={"name": "neg", "width": -5})
+        assert resp.status_code == 201
+        assert resp.get_json()["width"] is None
 
-    def test_create_panel_width_zero(self, client):
-        resp = client.post("/panels", json={"name": "bad", "width": 0})
-        assert resp.status_code == 400
+    def test_create_panel_width_zero_treated_as_auto(self, client):
+        resp = client.post("/panels", json={"name": "zero", "width": 0})
+        assert resp.status_code == 201
+        assert resp.get_json()["width"] is None
 
     def test_create_panel_width_string(self, client):
         resp = client.post("/panels", json={"name": "bad", "width": "wide"})

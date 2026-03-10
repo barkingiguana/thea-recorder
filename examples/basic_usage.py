@@ -10,7 +10,7 @@ from recorder import Recorder, generate_report
 recorder = Recorder(
     output_dir="./recordings",
     display=99,
-    browser_size="1920x1080",
+    display_size="1920x1080",
     framerate=15,
 )
 
@@ -24,10 +24,10 @@ recorder.start_display()
 # 4. Record a session
 recorder.start_recording("my_first_recording")
 recorder.update_panel("status", "Running")
-recorder.update_panel("log", "Step 1: Opening browser\nStep 2: Navigating to page")
+recorder.update_panel("log", "Step 1: Launching application\nStep 2: Performing action")
 
-# ... your Selenium / Playwright / browser automation runs here ...
-# The browser should be configured to use DISPLAY=:99
+# ... your application runs here (browser, GUI app, terminal, etc.) ...
+# Configure it to use DISPLAY=:99
 
 # 5. Stop and get the video path
 video_path = recorder.stop_recording()

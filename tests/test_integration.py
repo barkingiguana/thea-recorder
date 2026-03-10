@@ -15,7 +15,10 @@ class TestRecordingLifecycle:
 
     @patch("recorder.recorder.subprocess.Popen")
     def test_full_lifecycle(self, mock_popen, tmp_path):
-        mock_popen.return_value = Mock()
+        proc = Mock()
+        proc.returncode = 0
+        proc.stderr = None
+        mock_popen.return_value = proc
         out = str(tmp_path / "recordings")
 
         # 1. Create recorder and add panels
@@ -85,7 +88,10 @@ class TestRecordingLifecycle:
     @patch("recorder.recorder.subprocess.Popen")
     def test_dynamic_panels(self, mock_popen, tmp_path):
         """Panels can be added/removed between scenarios."""
-        mock_popen.return_value = Mock()
+        proc = Mock()
+        proc.returncode = 0
+        proc.stderr = None
+        mock_popen.return_value = proc
         r = Recorder(output_dir=str(tmp_path))
         r.add_panel("status", title="Status", width=120)
         r.add_panel("scenario", title="Scenario")
@@ -113,7 +119,10 @@ class TestRecordingLifecycle:
     @patch("recorder.recorder.subprocess.Popen")
     def test_panel_scrolling_during_scenario(self, mock_popen, tmp_path):
         """Panel content scrolls as steps execute."""
-        mock_popen.return_value = Mock()
+        proc = Mock()
+        proc.returncode = 0
+        proc.stderr = None
+        mock_popen.return_value = proc
         r = Recorder(output_dir=str(tmp_path))
         r.add_panel("steps", title="Steps")
 
@@ -144,9 +153,9 @@ class TestRecorderDefaults:
         r = Recorder()
         assert r._display == 99
 
-    def test_default_browser_size(self):
+    def test_default_display_size(self):
         r = Recorder()
-        assert r._browser_size == "1920x1080"
+        assert r._display_size == "1920x1080"
 
     def test_default_framerate(self):
         r = Recorder()
@@ -156,14 +165,14 @@ class TestRecorderDefaults:
         r = Recorder(
             output_dir="/my/videos",
             display=5,
-            browser_size="1280x720",
+            display_size="1280x720",
             framerate=30,
             font="/f.ttf",
             font_bold="/b.ttf",
         )
         assert r._output_dir == "/my/videos"
         assert r._display == 5
-        assert r._browser_size == "1280x720"
+        assert r._display_size == "1280x720"
         assert r._framerate == 30
         assert r._font == "/f.ttf"
         assert r._font_bold == "/b.ttf"

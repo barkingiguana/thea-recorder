@@ -1,13 +1,12 @@
 """Product demo orchestration with thea-recorder.
 
-Records a scripted walkthrough of a web application and produces a
+Records a scripted walkthrough of an application and produces a
 polished MP4 — no test framework required.  Run this from a CI pipeline
 or a developer's laptop to generate a fresh demo video on demand.
 
 Requirements:
   - thea serve running  (thea serve --port 9123 --output-dir ./recordings)
-  - Selenium or Playwright installed in your environment
-  - Browser configured to use DISPLAY=:99 (the display managed by thea)
+  - Your application configured to use DISPLAY=:99 (the display managed by thea)
 """
 
 import os
@@ -38,10 +37,10 @@ def narrate(scene: str, action: str):
 # ── Record the demo ───────────────────────────────────────────────────────
 
 with client.recording("product_demo_v2") as result:
-    # In a real script you'd launch a browser here, e.g.:
+    # In a real script you'd launch your application here, e.g.:
     #   from selenium import webdriver
-    #   driver = webdriver.Chrome()          # DISPLAY=:99 set in environment
-    #   driver.maximize_window()
+    #   driver = webdriver.Chrome()          # browser example
+    #   subprocess.Popen(["my-gui-app"])     # or a GUI app
 
     narrate("Login", "Navigating to the login page")
     time.sleep(1.5)  # replace with: driver.get("https://app.example.com/login")
