@@ -12,6 +12,59 @@ Resources:
     Properties:
       Name: !Ref DomainName
 
+  # SES inbound email
+  MXRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Ref DomainName
+      Type: MX
+      TTL: 300
+      ResourceRecords:
+        - "10 inbound-smtp.us-east-1.amazonaws.com"
+
+  # SES domain verification
+  SESTxtRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub "_amazonses.${DomainName}"
+      Type: TXT
+      TTL: 300
+      ResourceRecords:
+        - '"l30+upLbh637n+iuAQwWMCXX9/Lcis+TLyXLt4UUrdo="'
+
+  # DKIM records
+  DKIMRecord1:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub "3khfc6s7gmqv3ep43rrrb2jxs4ksryru._domainkey.${DomainName}"
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - 3khfc6s7gmqv3ep43rrrb2jxs4ksryru.dkim.amazonses.com
+
+  DKIMRecord2:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub "swmtjiwan23a3x7auge3eifn3cqg2h6y._domainkey.${DomainName}"
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - swmtjiwan23a3x7auge3eifn3cqg2h6y.dkim.amazonses.com
+
+  DKIMRecord3:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      Name: !Sub "ifdcv3ufqhwbe76hzlhu2ehcjcdwvqgu._domainkey.${DomainName}"
+      Type: CNAME
+      TTL: 300
+      ResourceRecords:
+        - ifdcv3ufqhwbe76hzlhu2ehcjcdwvqgu.dkim.amazonses.com
+
 Outputs:
   HostedZoneId:
     Value: !Ref HostedZone
