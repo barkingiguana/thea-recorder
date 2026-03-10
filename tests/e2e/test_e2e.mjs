@@ -2,7 +2,7 @@
 
 import { RecorderClient } from "./dist/index.js";
 
-const url = process.env.RECORDER_URL || "http://localhost:9123";
+const url = process.env.THEA_URL || "http://localhost:9123";
 const client = new RecorderClient({ url });
 
 async function main() {

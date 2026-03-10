@@ -16,11 +16,11 @@ import time
 # pip install thea-recorder   (or: from sdks/python)
 from thea import RecorderClient
 
-RECORDER_URL = os.environ.get("RECORDER_URL", "http://localhost:9123")
+THEA_URL = os.environ.get("THEA_URL", "http://localhost:9123")
 
 # ── Connect ───────────────────────────────────────────────────────────────
 
-client = RecorderClient(RECORDER_URL)
+client = RecorderClient(THEA_URL)
 client.wait_until_ready(timeout=30)
 
 # ── Set up overlay panels ─────────────────────────────────────────────────

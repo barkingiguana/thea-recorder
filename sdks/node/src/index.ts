@@ -104,7 +104,7 @@ export class RecorderClient {
 
   constructor(options?: RecorderClientOptions) {
     const envUrl =
-      typeof process !== "undefined" ? process.env.RECORDER_URL : undefined;
+      typeof process !== "undefined" ? process.env.THEA_URL : undefined;
     this.baseUrl = (options?.url ?? envUrl ?? DEFAULT_URL).replace(/\/+$/, "");
     this.timeout = options?.timeout ?? DEFAULT_TIMEOUT;
   }

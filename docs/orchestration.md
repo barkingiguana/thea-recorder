@@ -108,11 +108,11 @@ session.
 import threading
 from thea import RecorderClient
 
-RECORDER_URL = "http://localhost:9123"
+THEA_URL = "http://localhost:9123"
 
 def user_session(user_id):
     session_name = f"user_{user_id}"
-    client = RecorderClient(RECORDER_URL)
+    client = RecorderClient(THEA_URL)
 
     client.create_session(session_name)   # server allocates a display
     try:
@@ -189,7 +189,7 @@ services:
     depends_on: [recorder]
     command: python examples/parallel_users.py
     environment:
-      RECORDER_URL: http://recorder:9123
+      THEA_URL: http://recorder:9123
 ```
 
 ### Parallel recordings in test frameworks

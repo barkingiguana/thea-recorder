@@ -48,7 +48,7 @@ class RecorderClient:
     ----------
     url:
         Base URL of the recorder server (e.g. ``http://localhost:8080``).
-        Falls back to the ``RECORDER_URL`` environment variable.
+        Falls back to the ``THEA_URL`` environment variable.
     timeout:
         Default request timeout in seconds.
     """
@@ -58,11 +58,7 @@ class RecorderClient:
         url: str | None = None,
         timeout: float = 30.0,
     ) -> None:
-        resolved = url or os.environ.get("RECORDER_URL")
-        if not resolved:
-            raise RecorderError(
-                "No URL provided and RECORDER_URL environment variable is not set"
-            )
+        resolved = url or os.environ.get("THEA_URL") or "http://localhost:9123"
         self.base_url: str = resolved.rstrip("/")
         self.timeout: float = timeout
         self._session_prefix: str = ""  # empty = default session

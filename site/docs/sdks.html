@@ -188,7 +188,7 @@ client.recording(<span class="str">"login_test"</span>) <span class="kw">do</spa
 <span class="kw">require</span> <span class="str">"recorder"</span>
 
 $recorder = Recorder::Client.new(
-  ENV.fetch(<span class="str">"RECORDER_URL"</span>, <span class="str">"http://localhost:9123"</span>)
+  ENV.fetch(<span class="str">"THEA_URL"</span>, <span class="str">"http://localhost:9123"</span>)
 )
 $recorder.wait_until_ready(timeout: 30)
 $recorder.start_display
@@ -250,7 +250,7 @@ test(<span class="str">"login flow"</span>, <span class="kw">async</span> ({ pag
     <p>No SDK needed. Use the <code>thea</code> CLI or plain <code>curl</code> calls.</p>
 
     <h4>CLI quick start</h4>
-<pre><code><span class="kw">export</span> RECORDER_URL=http://localhost:9123
+<pre><code><span class="kw">export</span> THEA_URL=http://localhost:9123
 
 <span class="cmd">thea</span> start-display
 <span class="cmd">thea</span> add-panel <span class="flag">--name</span> status <span class="flag">--title</span> Status <span class="flag">--width</span> 120
@@ -340,7 +340,7 @@ test(<span class="str">"login flow"</span>, <span class="kw">async</span> ({ pag
         </thead>
         <tbody>
             <tr><td>URL</td><td>Constructor argument</td></tr>
-            <tr><td><code>RECORDER_URL</code></td><td>Environment variable (fallback if no URL passed)</td></tr>
+            <tr><td><code>THEA_URL</code></td><td>Environment variable (fallback if no URL passed)</td></tr>
             <tr><td>Timeout</td><td>Configurable per SDK (default 30s)</td></tr>
         </tbody>
     </table>

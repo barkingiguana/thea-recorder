@@ -86,12 +86,12 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// NewClient creates a new Client. If baseURL is empty the RECORDER_URL
+// NewClient creates a new Client. If baseURL is empty the THEA_URL
 // environment variable is used. If that is also empty, "http://localhost:9123"
 // is used as the default.
 func NewClient(baseURL string) *Client {
 	if baseURL == "" {
-		baseURL = os.Getenv("RECORDER_URL")
+		baseURL = os.Getenv("THEA_URL")
 	}
 	if baseURL == "" {
 		baseURL = "http://localhost:9123"

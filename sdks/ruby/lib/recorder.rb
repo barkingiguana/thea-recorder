@@ -13,7 +13,7 @@ module Recorder
     attr_reader :base_url, :timeout
 
     def initialize(url = nil, timeout: 30)
-      @base_url = (url || ENV["RECORDER_URL"] || "http://localhost:9123").chomp("/")
+      @base_url = (url || ENV["THEA_URL"] || "http://localhost:9123").chomp("/")
       @timeout = timeout
       @uri = URI.parse(@base_url)
     end

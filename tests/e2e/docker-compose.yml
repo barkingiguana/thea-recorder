@@ -20,7 +20,7 @@ services:
       context: ../..
       dockerfile: tests/e2e/Dockerfile.go
     environment:
-      RECORDER_URL: http://recorder:9123
+      THEA_URL: http://recorder:9123
     depends_on:
       recorder:
         condition: service_healthy
@@ -30,7 +30,7 @@ services:
       context: ../..
       dockerfile: tests/e2e/Dockerfile.python
     environment:
-      RECORDER_URL: http://recorder:9123
+      THEA_URL: http://recorder:9123
     depends_on:
       recorder:
         condition: service_healthy
@@ -40,7 +40,7 @@ services:
       context: ../..
       dockerfile: tests/e2e/Dockerfile.ruby
     environment:
-      RECORDER_URL: http://recorder:9123
+      THEA_URL: http://recorder:9123
     depends_on:
       recorder:
         condition: service_healthy
@@ -50,7 +50,7 @@ services:
       context: ../..
       dockerfile: tests/e2e/Dockerfile.node
     environment:
-      RECORDER_URL: http://recorder:9123
+      THEA_URL: http://recorder:9123
     depends_on:
       recorder:
         condition: service_healthy
@@ -60,7 +60,7 @@ services:
       context: ../..
       dockerfile: tests/e2e/Dockerfile.java
     environment:
-      RECORDER_URL: http://recorder:9123
+      THEA_URL: http://recorder:9123
     depends_on:
       recorder:
         condition: service_healthy

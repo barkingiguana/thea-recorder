@@ -13,19 +13,19 @@ class TestRecorderClient < Minitest::Test
   # --- Constructor ---
 
   def test_default_url
-    ENV["RECORDER_URL"] = "http://custom:9000"
+    ENV["THEA_URL"] = "http://custom:9000"
     client = Recorder::Client.new
     assert_equal "http://custom:9000", client.base_url
   ensure
-    ENV.delete("RECORDER_URL")
+    ENV.delete("THEA_URL")
   end
 
   def test_explicit_url_overrides_env
-    ENV["RECORDER_URL"] = "http://custom:9000"
+    ENV["THEA_URL"] = "http://custom:9000"
     client = Recorder::Client.new("http://explicit:4000")
     assert_equal "http://explicit:4000", client.base_url
   ensure
-    ENV.delete("RECORDER_URL")
+    ENV.delete("THEA_URL")
   end
 
   def test_default_timeout

@@ -9,7 +9,7 @@ from thea.client import RecorderClient
 
 
 def main():
-    url = os.environ.get("RECORDER_URL", "http://localhost:9123")
+    url = os.environ.get("THEA_URL", "http://localhost:9123")
     client = RecorderClient(url)
 
     print("[python] Waiting for server...")

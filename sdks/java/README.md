@@ -40,7 +40,7 @@ try (var client = new RecorderClient("http://localhost:9123")) {
 // Explicit URL
 var client = new RecorderClient("http://localhost:9123");
 
-// From RECORDER_URL environment variable
+// From THEA_URL environment variable
 var client = new RecorderClient();
 
 // With custom timeout

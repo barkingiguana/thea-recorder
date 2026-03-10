@@ -154,7 +154,7 @@
       <span class="fn">recorder</span>:
         <span class="kw">condition</span>: service_healthy
     <span class="kw">environment</span>:
-      - RECORDER_URL=http://recorder:9123
+      - THEA_URL=http://recorder:9123
     <span class="kw">volumes</span>:
       - ./recordings:/recordings</code><span class="lang-label">yaml</span></pre>
 
@@ -199,7 +199,7 @@
 
       - <span class="kw">name</span>: Run tests
         <span class="kw">env</span>:
-          <span class="fn">RECORDER_URL</span>: http://localhost:9123
+          <span class="fn">THEA_URL</span>: http://localhost:9123
         <span class="kw">run</span>: |
           pip install thea-recorder
           pytest tests/
@@ -282,7 +282,7 @@
 
       - <span class="kw">name</span>: Run test suite
         <span class="kw">env</span>:
-          <span class="fn">RECORDER_URL</span>: http://localhost:9123
+          <span class="fn">THEA_URL</span>: http://localhost:9123
         <span class="kw">run</span>: |
           pytest tests/ -v --tb=short
 
@@ -335,7 +335,7 @@
 <pre><code><span class="kw">import</span> os
 <span class="kw">from</span> thea <span class="kw">import</span> RecorderClient
 
-client = RecorderClient(os.environ[<span class="str">"RECORDER_URL"</span>])
+client = RecorderClient(os.environ[<span class="str">"THEA_URL"</span>])
 
 <span class="kw">def</span> <span class="fn">test_invoice_submission</span>():
     client.start_recording(<span class="str">"invoice-submission"</span>)
@@ -388,12 +388,12 @@ client = RecorderClient(os.environ[<span class="str">"RECORDER_URL"</span>])
     - <span class="kw">name</span>: thea-recorder
       <span class="kw">alias</span>: recorder
   <span class="kw">variables</span>:
-    <span class="fn">RECORDER_URL</span>: http://recorder:9123
+    <span class="fn">THEA_URL</span>: http://recorder:9123
   <span class="kw">before_script</span>:
     - pip install thea-recorder
     - |
       <span class="kw">for</span> i <span class="kw">in</span> $(seq 1 30); <span class="kw">do</span>
-        curl -sf $RECORDER_URL/health && break
+        curl -sf $THEA_URL/health && break
         sleep 1
       <span class="kw">done</span>
   <span class="kw">script</span>:

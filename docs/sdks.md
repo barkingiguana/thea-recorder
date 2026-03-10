@@ -110,7 +110,7 @@ All SDKs support:
 | Config | Method |
 |---|---|
 | URL | Constructor argument |
-| `RECORDER_URL` | Environment variable (fallback if no URL passed) |
+| `THEA_URL` | Environment variable (fallback if no URL passed) |
 | Timeout | Configurable (default 30s) |
 
 ## Per-SDK Documentation

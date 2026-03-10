@@ -117,7 +117,7 @@ func InitializeScenario(ctx *godog.ScenarioContext) {
 import os
 from thea import RecorderClient
 
-client = RecorderClient(os.environ.get("RECORDER_URL", "http://localhost:9123"))
+client = RecorderClient(os.environ.get("THEA_URL", "http://localhost:9123"))
 
 def before_all(context):
     client.wait_until_ready(timeout=30)
@@ -190,7 +190,7 @@ def record_test(request, recorder):
 # features/support/env.rb
 require "recorder"
 
-$recorder = Recorder::Client.new(ENV.fetch("RECORDER_URL", "http://localhost:9123"))
+$recorder = Recorder::Client.new(ENV.fetch("THEA_URL", "http://localhost:9123"))
 $recorder.wait_until_ready(timeout: 30)
 $recorder.start_display
 $recorder.add_panel("status", title: "Status", width: 120)

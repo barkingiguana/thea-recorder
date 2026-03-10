@@ -70,7 +70,7 @@ class TestConstructor:
         assert c.base_url == "http://host:1234"
 
     def test_url_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("RECORDER_URL", "http://env-host:9999")
+        monkeypatch.setenv("THEA_URL", "http://env-host:9999")
         c = RecorderClient()
         assert c.base_url == "http://env-host:9999"
 
@@ -78,10 +78,10 @@ class TestConstructor:
         c = RecorderClient("http://host:1234/")
         assert c.base_url == "http://host:1234"
 
-    def test_no_url_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("RECORDER_URL", raising=False)
-        with pytest.raises(RecorderError, match="No URL provided"):
-            RecorderClient()
+    def test_no_url_defaults_to_localhost(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("THEA_URL", raising=False)
+        c = RecorderClient()
+        assert c.base_url == "http://localhost:9123"
 
     def test_custom_timeout(self) -> None:
         c = RecorderClient("http://host:1234", timeout=5.0)

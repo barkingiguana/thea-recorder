@@ -19,7 +19,7 @@ npm install thea-recorder
 import { RecorderClient } from "thea-recorder";
 
 const client = new RecorderClient({
-  url: "http://localhost:9123", // or set RECORDER_URL env var
+  url: "http://localhost:9123", // or set THEA_URL env var
 });
 
 // Wait for server to be ready
@@ -43,7 +43,7 @@ console.log(`Recorded ${result.name} (${result.elapsed}s) → ${result.path}`);
 
 ```typescript
 new RecorderClient(options?: {
-  url?: string;      // default: process.env.RECORDER_URL ?? "http://localhost:9123"
+  url?: string;      // default: process.env.THEA_URL ?? "http://localhost:9123"
   timeout?: number;  // request timeout in ms, default: 30000
 })
 ```

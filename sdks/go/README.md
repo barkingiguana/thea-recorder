@@ -22,7 +22,7 @@ import (
 )
 
 func main() {
-    client := recorder.NewClient("") // reads RECORDER_URL env, defaults to localhost:2233
+    client := recorder.NewClient("") // reads THEA_URL env, defaults to localhost:9123
 
     ctx := context.Background()
 
@@ -54,7 +54,7 @@ func main() {
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `NewClient(url)` | Server base URL. Pass `""` to use `RECORDER_URL` env or the default. | `http://localhost:2233` |
+| `NewClient(url)` | Server base URL. Pass `""` to use `THEA_URL` env or the default. | `http://localhost:9123` |
 | `SetTimeout(d)` | HTTP client timeout. | 30 seconds |
 
 ## API reference

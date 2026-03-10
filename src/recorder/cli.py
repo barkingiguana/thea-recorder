@@ -74,8 +74,8 @@ def _handle_connection_error(server: str):
 # ── Main group ───────────────────────────────────────────────────────────
 
 @click.group()
-@click.option("--server", envvar="RECORDER_URL", default="http://localhost:9123",
-              help="Recorder server URL (or set RECORDER_URL).")
+@click.option("--server", envvar="THEA_URL", default="http://localhost:9123",
+              help="Recorder server URL (or set THEA_URL).")
 @click.option("--quiet", is_flag=True, default=False, help="Suppress output (exit code only).")
 @click.option("--pretty", is_flag=True, default=False, help="Pretty-print JSON output.")
 @click.pass_context

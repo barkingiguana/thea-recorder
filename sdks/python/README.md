@@ -44,7 +44,7 @@ client.download_recording("my-demo", "/tmp/my-demo.mp4")
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `url` | `RECORDER_URL` env var | Base URL of the recorder server |
+| `url` | `THEA_URL` env var | Base URL of the recorder server |
 | `timeout` | `30.0` | Default request timeout in seconds |
 
 ## API reference

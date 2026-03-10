@@ -38,9 +38,9 @@ public class RecorderClient implements AutoCloseable {
     private final Duration timeout;
 
     /**
-     * Creates a client using the RECORDER_URL environment variable.
+     * Creates a client using the THEA_URL environment variable.
      *
-     * @throws RecorderError if RECORDER_URL is not set
+     * @throws RecorderError if THEA_URL is not set
      */
     public RecorderClient() {
         this(envUrl(), Duration.ofSeconds(30));
@@ -395,9 +395,9 @@ public class RecorderClient implements AutoCloseable {
     }
 
     private static String envUrl() {
-        var url = System.getenv("RECORDER_URL");
+        var url = System.getenv("THEA_URL");
         if (url == null || url.isBlank()) {
-            throw new RecorderError("RECORDER_URL environment variable is not set");
+            throw new RecorderError("THEA_URL environment variable is not set");
         }
         return url;
     }

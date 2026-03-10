@@ -104,7 +104,7 @@
         </thead>
         <tbody>
             <tr><td><code>--server</code> flag</td><td><code>thea --server http://host:9123 health</code></td></tr>
-            <tr><td><code>RECORDER_URL</code> env</td><td><code>export RECORDER_URL=http://host:9123</code></td></tr>
+            <tr><td><code>THEA_URL</code> env</td><td><code>export THEA_URL=http://host:9123</code></td></tr>
             <tr><td>Default</td><td><code>http://localhost:9123</code></td></tr>
         </tbody>
     </table>
@@ -184,7 +184,7 @@
 <pre><code><span class="cm">#!/bin/bash</span>
 <span class="kw">set</span> -euo pipefail
 
-<span class="kw">export</span> RECORDER_URL=http://localhost:9123
+<span class="kw">export</span> THEA_URL=http://localhost:9123
 
 <span class="cmd">thea</span> start-display
 <span class="cmd">thea</span> add-panel <span class="flag">--name</span> status <span class="flag">--title</span> Status <span class="flag">--width</span> 120

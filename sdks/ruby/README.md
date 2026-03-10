@@ -22,7 +22,7 @@ cd sdks/ruby && bundle install
 require "recorder"
 
 client = Recorder::Client.new("http://localhost:3000")
-# Or rely on RECORDER_URL env var:
+# Or rely on THEA_URL env var:
 # client = Recorder::Client.new
 
 # Wait for the server to be reachable

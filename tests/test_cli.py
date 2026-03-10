@@ -63,7 +63,7 @@ class TestServerFlag:
 
     def test_env_var(self, runner, mock_server):
         url, _ = mock_server
-        result = runner.invoke(main, ["health"], env={"RECORDER_URL": url})
+        result = runner.invoke(main, ["health"], env={"THEA_URL": url})
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["status"] == "ok"

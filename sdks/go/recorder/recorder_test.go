@@ -523,8 +523,8 @@ func TestContextCancellation(t *testing.T) {
 }
 
 func TestNewClientEnvFallback(t *testing.T) {
-	os.Setenv("RECORDER_URL", "http://env-host:9999")
-	defer os.Unsetenv("RECORDER_URL")
+	os.Setenv("THEA_URL", "http://env-host:9999")
+	defer os.Unsetenv("THEA_URL")
 
 	c := recorder.NewClient("")
 	if c.BaseURL() != "http://env-host:9999" {
@@ -533,7 +533,7 @@ func TestNewClientEnvFallback(t *testing.T) {
 }
 
 func TestNewClientDefault(t *testing.T) {
-	os.Unsetenv("RECORDER_URL")
+	os.Unsetenv("THEA_URL")
 	c := recorder.NewClient("")
 	if c.BaseURL() != "http://localhost:9123" {
 		t.Fatalf("expected default URL, got %q", c.BaseURL())

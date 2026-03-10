@@ -149,9 +149,9 @@ thea --server http://localhost:9123 list-recordings
 thea --server http://localhost:9123 health
 ```
 
-Set `RECORDER_URL` to avoid repeating `--server`:
+Set `THEA_URL` to avoid repeating `--server`:
 ```bash
-export RECORDER_URL=http://localhost:9123
+export THEA_URL=http://localhost:9123
 thea health
 thea start-display
 thea start-recording --name my-test

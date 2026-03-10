@@ -18,14 +18,14 @@ import threading
 
 from thea import RecorderClient
 
-RECORDER_URL = os.environ.get("RECORDER_URL", "http://localhost:9123")
+THEA_URL = os.environ.get("THEA_URL", "http://localhost:9123")
 
 # ── Per-user scenario ──────────────────────────────────────────────────────
 
 def user_session(user_id: int):
     """Drive one browser in its own isolated session."""
     session_name = f"user_{user_id}"
-    client = RecorderClient(RECORDER_URL)
+    client = RecorderClient(THEA_URL)
 
     # Create a dedicated session — the server allocates a free display number.
     client.create_session(session_name)
@@ -75,7 +75,7 @@ def user_session(user_id: int):
 USER_IDS = [1, 2, 3]
 
 # Wait for the server to be ready before spawning threads
-RecorderClient(RECORDER_URL).wait_until_ready(timeout=30)
+RecorderClient(THEA_URL).wait_until_ready(timeout=30)
 
 threads = [
     threading.Thread(target=user_session, args=(uid,), name=f"user-{uid}")

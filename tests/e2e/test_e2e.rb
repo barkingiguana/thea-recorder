@@ -2,7 +2,7 @@
 
 require_relative "lib/recorder"
 
-url = ENV["RECORDER_URL"] || "http://localhost:9123"
+url = ENV["THEA_URL"] || "http://localhost:9123"
 client = Recorder::Client.new(url)
 
 puts "[ruby] Waiting for server..."

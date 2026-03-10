@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	url := os.Getenv("RECORDER_URL")
+	url := os.Getenv("THEA_URL")
 	if url == "" {
 		url = "http://localhost:9123"
 	}

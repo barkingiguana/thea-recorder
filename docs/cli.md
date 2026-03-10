@@ -30,7 +30,7 @@ Every client command talks to a running server via HTTP.
 | Method | Example |
 |---|---|
 | `--server` flag | `thea --server http://host:9123 health` |
-| `RECORDER_URL` env | `export RECORDER_URL=http://host:9123` |
+| `THEA_URL` env | `export THEA_URL=http://host:9123` |
 | Default | `http://localhost:9123` |
 
 ### Output Flags
@@ -112,7 +112,7 @@ thea version
 #!/bin/bash
 set -euo pipefail
 
-export RECORDER_URL=http://localhost:9123
+export THEA_URL=http://localhost:9123
 
 thea start-display
 thea add-panel --name status --title Status --width 120

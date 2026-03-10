@@ -6,7 +6,7 @@ import java.time.Duration;
  */
 public class TestE2E {
     public static void main(String[] args) throws Exception {
-        String url = System.getenv("RECORDER_URL");
+        String url = System.getenv("THEA_URL");
         if (url == null || url.isEmpty()) url = "http://localhost:9123";
 
         try (var client = new RecorderClient(url)) {

@@ -12,14 +12,14 @@ import (
 
 // ExampleNewClient demonstrates creating a client with the default URL.
 func ExampleNewClient() {
-	client := recorder.NewClient("http://localhost:2233")
+	client := recorder.NewClient("http://localhost:9123")
 	fmt.Println(client.BaseURL())
-	// Output: http://localhost:2233
+	// Output: http://localhost:9123
 }
 
 // ExampleClient_SetTimeout demonstrates configuring the HTTP timeout.
 func ExampleClient_SetTimeout() {
-	client := recorder.NewClient("http://localhost:2233")
+	client := recorder.NewClient("http://localhost:9123")
 	client.SetTimeout(60 * time.Second)
 	fmt.Println("timeout configured")
 	// Output: timeout configured

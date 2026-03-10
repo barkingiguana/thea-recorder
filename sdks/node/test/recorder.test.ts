@@ -403,30 +403,30 @@ describe("RecorderClient – timeout", () => {
 
 describe("RecorderClient – defaults", () => {
   it("defaults to http://localhost:9123", () => {
-    // Ensure RECORDER_URL is not set for this test
-    const prev = process.env.RECORDER_URL;
-    delete process.env.RECORDER_URL;
+    // Ensure THEA_URL is not set for this test
+    const prev = process.env.THEA_URL;
+    delete process.env.THEA_URL;
     try {
       const client = new RecorderClient();
       // We can't directly access private baseUrl, but we can verify
       // the client was created without errors.
       expect(client).toBeInstanceOf(RecorderClient);
     } finally {
-      if (prev !== undefined) process.env.RECORDER_URL = prev;
+      if (prev !== undefined) process.env.THEA_URL = prev;
     }
   });
 
-  it("reads RECORDER_URL from environment", () => {
-    const prev = process.env.RECORDER_URL;
-    process.env.RECORDER_URL = "http://custom:1234";
+  it("reads THEA_URL from environment", () => {
+    const prev = process.env.THEA_URL;
+    process.env.THEA_URL = "http://custom:1234";
     try {
       const client = new RecorderClient();
       expect(client).toBeInstanceOf(RecorderClient);
     } finally {
       if (prev !== undefined) {
-        process.env.RECORDER_URL = prev;
+        process.env.THEA_URL = prev;
       } else {
-        delete process.env.RECORDER_URL;
+        delete process.env.THEA_URL;
       }
     }
   });
