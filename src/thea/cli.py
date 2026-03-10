@@ -338,7 +338,7 @@ def cleanup(ctx):
 @click.pass_context
 def version(ctx):
     """Print the recorder version."""
-    _print_result({"version": "0.5.2"}, ctx.obj["quiet"], ctx.obj["pretty"])
+    _print_result({"version": "0.5.3"}, ctx.obj["quiet"], ctx.obj["pretty"])
 
 
 # ── Layout commands ──────────────────────────────────────────────────
