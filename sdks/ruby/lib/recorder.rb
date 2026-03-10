@@ -5,7 +5,7 @@ require "uri"
 require "json"
 
 module Recorder
-  VERSION = "0.3.0"
+  VERSION = "0.4.0"
 
   class Error < StandardError; end
 
