@@ -1104,6 +1104,15 @@ h3 {
     font-weight: 300;
 }
 
+/* ═══════════════════════════════════════════ LAYOUT SECTION */
+.layout-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+    margin-top: 3rem;
+    align-items: start;
+}
+
 /* ═══════════════════════════════════════════ FOOTER */
 footer {
     padding: 4rem 2rem;
@@ -1166,6 +1175,7 @@ footer {
     .why-grid { grid-template-columns: 1fr; }
     .features-grid { grid-template-columns: repeat(2, 1fr); }
     .beyond-grid { grid-template-columns: 1fr; }
+    .layout-grid { grid-template-columns: 1fr; }
     .mock-steps { display: none; }
 }
 
@@ -1206,6 +1216,7 @@ footer {
         <li><a href="#examples">Examples</a></li>
         <li><a href="#report">Report</a></li>
         <li><a href="#parallel">Parallel</a></li>
+        <li><a href="#layout">Layout</a></li>
         <li><a href="docs/">Docs</a></li>
         <li><a href="https://github.com/BarkingIguana/thea" class="nav-pip">pip install thea-recorder</a></li>
     </ul>
@@ -1398,8 +1409,8 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
                 <div class="feature-icon">&#9638;</div>
                 <h4>Panel overlay system</h4>
                 <p>
-                    Named columns below the application viewport with live-updating text.
-                    Fixed or auto-width layout. Smart scrolling keeps the active line visible.
+                    Named columns below the viewport with live-updating text.
+                    Custom width and height per panel. Smart scrolling keeps the active line visible.
                 </p>
             </div>
             <div class="feature-card">
@@ -1432,6 +1443,22 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
                 <p>
                     Example Dockerfile included. Works with any CI system that supports
                     Docker. Just mount a volume for the recordings.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9878;</div>
+                <h4>Layout validation</h4>
+                <p>
+                    Automatic warnings when panels overlap, exceed the canvas, or don't fit.
+                    Generate an SVG testcard to visualise the layout before you record.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#127909;</div>
+                <h4>Video composition</h4>
+                <p>
+                    Tile multiple recordings side-by-side, stacked, or in a grid. Add
+                    timed highlight borders to call attention to specific moments.
                 </p>
             </div>
         </div>
@@ -2045,6 +2072,137 @@ curl -X DELETE http://localhost:9123/sessions/bob</div>
     </div>
 </section>
 
+<!-- ═══ LAYOUT VALIDATION ═══ -->
+<section class="beyond-section" id="layout">
+    <div class="section-inner">
+        <div class="section-label">Layout validation</div>
+        <h2>See your layout before you record.</h2>
+        <p class="section-sub">
+            Build up panels, set custom widths and heights, then validate the layout automatically
+            or generate an SVG testcard to see exactly what the recording will look like &mdash;
+            before ffmpeg captures a single frame.
+        </p>
+
+        <div class="layout-grid">
+
+            <!-- Testcard preview -->
+            <div style="background:var(--bg-surface);border:1px solid var(--border-dim);border-radius:14px;padding:1.5rem;overflow:hidden;">
+                <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--text-muted);margin-bottom:1rem;text-transform:uppercase;letter-spacing:1.5px;">Testcard output</div>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 740" style="width:100%;height:auto;border-radius:8px;">
+                    <rect width="1000" height="740" fill="#0d0d0d"/>
+                    <text x="500" y="22" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold" fill="#58a6ff">THEA LAYOUT TESTCARD</text>
+                    <!-- Canvas outline -->
+                    <rect x="20" y="30" width="960" height="690" fill="#111" stroke="#333" stroke-width="1.5" stroke-dasharray="6,3"/>
+                    <!-- Grid -->
+                    <g stroke="#1a1a1a" stroke-width="0.5">
+                        <line x1="120" y1="30" x2="120" y2="720"/><line x1="220" y1="30" x2="220" y2="720"/>
+                        <line x1="320" y1="30" x2="320" y2="720"/><line x1="420" y1="30" x2="420" y2="720"/>
+                        <line x1="520" y1="30" x2="520" y2="720"/><line x1="620" y1="30" x2="620" y2="720"/>
+                        <line x1="720" y1="30" x2="720" y2="720"/><line x1="820" y1="30" x2="820" y2="720"/>
+                        <line x1="920" y1="30" x2="920" y2="720"/>
+                        <line x1="20" y1="130" x2="980" y2="130"/><line x1="20" y1="230" x2="980" y2="230"/>
+                        <line x1="20" y1="330" x2="980" y2="330"/><line x1="20" y1="430" x2="980" y2="430"/>
+                        <line x1="20" y1="530" x2="980" y2="530"/><line x1="20" y1="630" x2="980" y2="630"/>
+                    </g>
+                    <!-- Viewport region (app) -->
+                    <rect x="20" y="30" width="960" height="540" fill="#1a3a5c" fill-opacity="0.6" stroke="#4a9eff" stroke-width="2.5" rx="3"/>
+                    <text x="500" y="290" text-anchor="middle" font-family="monospace" font-size="22" font-weight="bold" fill="#4a9eff">viewport</text>
+                    <text x="500" y="316" text-anchor="middle" font-family="monospace" font-size="13" fill="#888">1920x1080</text>
+                    <text x="28" y="46" font-family="monospace" font-size="10" fill="#555">(0,0)</text>
+                    <text x="968" y="46" text-anchor="end" font-family="monospace" font-size="10" fill="#555">app</text>
+                    <!-- Status panel -->
+                    <rect x="20" y="570" width="60" height="150" fill="#2d1a3e" fill-opacity="0.7" stroke="#b06ec8" stroke-width="2.5" rx="3"/>
+                    <text x="50" y="642" text-anchor="middle" font-family="monospace" font-size="12" font-weight="bold" fill="#b06ec8">status</text>
+                    <text x="50" y="660" text-anchor="middle" font-family="monospace" font-size="10" fill="#888">120x300</text>
+                    <text x="28" y="584" font-family="monospace" font-size="9" fill="#555">(0,1080)</text>
+                    <text x="72" y="584" text-anchor="end" font-family="monospace" font-size="9" fill="#555">panel</text>
+                    <!-- Scenario panel -->
+                    <rect x="80" y="570" width="900" height="150" fill="#2d1a3e" fill-opacity="0.7" stroke="#b06ec8" stroke-width="2.5" rx="3"/>
+                    <text x="530" y="642" text-anchor="middle" font-family="monospace" font-size="14" font-weight="bold" fill="#b06ec8">scenario</text>
+                    <text x="530" y="660" text-anchor="middle" font-family="monospace" font-size="11" fill="#888">1800x300</text>
+                    <text x="88" y="584" font-family="monospace" font-size="9" fill="#555">(120,1080)</text>
+                    <text x="972" y="584" text-anchor="end" font-family="monospace" font-size="9" fill="#555">panel</text>
+                    <!-- Footer -->
+                    <text x="500" y="735" text-anchor="middle" font-family="monospace" font-size="12" fill="#666">Canvas: 1920 x 1380</text>
+                </svg>
+            </div>
+
+            <!-- Code examples -->
+            <div>
+                <div class="code-block" style="margin-bottom:1.5rem;">
+                    <div class="example-tabs">
+                        <button class="example-tab active" onclick="showLayoutTab('layout-py')">Python</button>
+                        <button class="example-tab" onclick="showLayoutTab('layout-cli')">CLI</button>
+                        <button class="example-tab" onclick="showLayoutTab('layout-curl')">curl</button>
+                    </div>
+                    <div class="example-panel active" id="layout-py">
+                        <div class="code-content"><span class="kw">from</span> <span class="fn">thea</span> <span class="kw">import</span> RecorderClient
+
+client <span class="op">=</span> RecorderClient(<span class="str">"http://localhost:9123"</span>)
+client.<span class="fn">start_display</span>()
+
+<span class="cm"># Panels return warnings automatically</span>
+result <span class="op">=</span> client.<span class="fn">add_panel</span>(<span class="str">"status"</span>, title=<span class="str">"Status"</span>, width=<span class="fn">120</span>)
+result <span class="op">=</span> client.<span class="fn">add_panel</span>(<span class="str">"scenario"</span>, title=<span class="str">"Scenario"</span>)
+
+<span class="cm"># Explicit validation</span>
+info <span class="op">=</span> client.<span class="fn">validate_layout</span>()
+<span class="kw">print</span>(info[<span class="str">"valid"</span>])     <span class="cm"># True</span>
+<span class="kw">print</span>(info[<span class="str">"warnings"</span>])  <span class="cm"># []</span>
+
+<span class="cm"># Get an SVG testcard</span>
+svg <span class="op">=</span> client.<span class="fn">testcard</span>()
+<span class="kw">with</span> <span class="fn">open</span>(<span class="str">"layout.svg"</span>, <span class="str">"w"</span>) <span class="kw">as</span> f:
+    f.<span class="fn">write</span>(svg)</div>
+                    </div>
+                    <div class="example-panel" id="layout-cli">
+                        <div class="code-content"><span class="cm"># Add panels (warnings print to stderr)</span>
+thea add-panel <span class="op">--name</span> status <span class="op">--title</span> Status <span class="op">--width</span> <span class="fn">120</span>
+thea add-panel <span class="op">--name</span> scenario <span class="op">--title</span> Scenario
+
+<span class="cm"># Short panel for a compact bar</span>
+thea add-panel <span class="op">--name</span> timer <span class="op">--height</span> <span class="fn">60</span>
+
+<span class="cm"># Validate the layout</span>
+thea validate-layout
+
+<span class="cm"># Save an SVG testcard</span>
+thea testcard <span class="op">-o</span> layout.svg
+
+<span class="cm"># Suppress warnings if you want</span>
+thea <span class="op">--ignore-warnings</span> start-recording <span class="op">--name</span> demo</div>
+                    </div>
+                    <div class="example-panel" id="layout-curl">
+                        <div class="code-content"><span class="cm"># Add a panel (response includes warnings)</span>
+curl -X POST http://localhost:9123/panels \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"name":"status","title":"Status","width":120,"height":200}'</span>
+<span class="cm"># → {"name":"status","width":120,"height":200,"warnings":[]}</span>
+
+<span class="cm"># Validate the layout</span>
+curl http://localhost:9123/validate-layout
+<span class="cm"># → {"warnings":[],"valid":true}</span>
+
+<span class="cm"># Get an SVG testcard</span>
+curl http://localhost:9123/testcard <span class="op">-o</span> layout.svg</div>
+                    </div>
+                </div>
+
+                <div class="beyond-card" style="background:var(--bg-raised);border-color:var(--border-subtle);">
+                    <h4 style="color:var(--accent);">Automatic warnings</h4>
+                    <p>
+                        Every <code>add_panel</code> and <code>start_recording</code> call
+                        validates the layout and returns warnings if panels overlap, exceed
+                        the canvas, or if the bar is taller than the allocated display space.
+                        The CLI prints them to stderr; pass <code>--ignore-warnings</code>
+                        to suppress.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
 <!-- ═══ FOOTER ═══ -->
 <footer>
     <div class="footer-inner">
@@ -2088,6 +2246,14 @@ function showHeroTab(name) {
 }
 
 function showParallelTab(name) {
+    const block = document.getElementById(name).closest('.code-block');
+    block.querySelectorAll('.example-tab').forEach(t => t.classList.remove('active'));
+    block.querySelectorAll('.example-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(name).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+
+function showLayoutTab(name) {
     const block = document.getElementById(name).closest('.code-block');
     block.querySelectorAll('.example-tab').forEach(t => t.classList.remove('active'));
     block.querySelectorAll('.example-panel').forEach(p => p.classList.remove('active'));

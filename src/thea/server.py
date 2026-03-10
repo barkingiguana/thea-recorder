@@ -158,9 +158,18 @@ def create_app(
                 return jsonify({"error": "field 'width' must be an integer"}), 400
             if width <= 0:
                 width = None  # treat zero/negative as auto-width
+        height = data.get("height")
+        if height is not None:
+            if not isinstance(height, int):
+                return jsonify({"error": "field 'height' must be an integer"}), 400
+            if height <= 0:
+                return jsonify({"error": "field 'height' must be positive"}), 400
         with sess_lock:
-            rec.add_panel(name, title=title, width=width)
-        return jsonify({"name": name, "title": title, "width": width}), 201
+            warnings = rec.add_panel(name, title=title, width=width, height=height)
+        result = {"name": name, "title": title, "width": width, "height": height}
+        if warnings:
+            result["warnings"] = warnings
+        return jsonify(result), 201
 
     def _impl_panels_update(rec, sess_lock, panel_name):
         with sess_lock:
@@ -188,8 +197,11 @@ def create_app(
             if rec._ffmpeg_proc is not None:
                 return jsonify({"error": "already recording"}), 409
             cur_name["name"] = name
-            rec.start_recording(name)
-        return jsonify({"status": "recording", "name": name}), 201
+            warnings = rec.start_recording(name)
+        result = {"status": "recording", "name": name}
+        if warnings:
+            result["warnings"] = warnings
+        return jsonify(result), 201
 
     def _impl_recording_stop(rec, sess_lock, cur_name):
         with sess_lock:
@@ -218,6 +230,16 @@ def create_app(
             cur_name["name"] = None
             rec.cleanup()
         return jsonify({"status": "cleaned"}), 200
+
+    def _impl_validate_layout(rec, sess_lock):
+        with sess_lock:
+            warnings = rec.validate_layout()
+        return jsonify({"warnings": warnings, "valid": len(warnings) == 0}), 200
+
+    def _impl_testcard(rec, sess_lock):
+        with sess_lock:
+            svg = rec.generate_testcard()
+        return Response(svg, mimetype="image/svg+xml")
 
     def _impl_health(rec, sess_lock, uptime):
         with sess_lock:
@@ -411,6 +433,20 @@ def create_app(
             return err
         return _impl_health(sess["recorder"], sess["lock"], time.monotonic() - start_time)
 
+    @app.route("/sessions/<session_name>/validate-layout", methods=["GET"])
+    def sess_validate_layout(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_validate_layout(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/testcard", methods=["GET"])
+    def sess_testcard(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_testcard(sess["recorder"], sess["lock"])
+
     # ── Default session endpoints (backward-compatible) ───────────────────
 
     @app.route("/display/start", methods=["POST"])
@@ -523,6 +559,14 @@ def create_app(
     @app.route("/health", methods=["GET"])
     def health():
         return _impl_health(recorder, lock, time.monotonic() - start_time)
+
+    @app.route("/validate-layout", methods=["GET"])
+    def validate_layout():
+        return _impl_validate_layout(recorder, lock)
+
+    @app.route("/testcard", methods=["GET"])
+    def testcard():
+        return _impl_testcard(recorder, lock)
 
     @app.route("/cleanup", methods=["POST"])
     def cleanup():

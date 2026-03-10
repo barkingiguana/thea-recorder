@@ -40,10 +40,27 @@ func (e *RecorderError) Error() string {
 
 // Panel describes a terminal panel managed by the recorder.
 type Panel struct {
-	Name  string `json:"name"`
-	Title string `json:"title,omitempty"`
-	Width int    `json:"width,omitempty"`
-	Text  string `json:"text,omitempty"`
+	Name   string `json:"name"`
+	Title  string `json:"title,omitempty"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+	Text   string `json:"text,omitempty"`
+}
+
+// AddPanelResult is the payload returned by POST /panels.
+type AddPanelResult struct {
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// StartRecordingResult is the payload returned by POST /recording/start.
+type StartRecordingResult struct {
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+// LayoutValidation is the payload returned by GET /validate-layout.
+type LayoutValidation struct {
+	Warnings []string `json:"warnings"`
+	Valid    bool     `json:"valid"`
 }
 
 // Health is the payload returned by GET /health.
@@ -171,9 +188,17 @@ func (c *Client) StopDisplay(ctx context.Context) error {
 // ---------------------------------------------------------------------------
 
 // AddPanel creates a new panel (POST /panels).
-func (c *Client) AddPanel(ctx context.Context, name, title string, width int) error {
+// Pass nil for height to omit it from the request.
+func (c *Client) AddPanel(ctx context.Context, name, title string, width int, height *int) (*AddPanelResult, error) {
 	body := map[string]any{"name": name, "title": title, "width": width}
-	return c.doSimple(ctx, http.MethodPost, "/panels", body, http.StatusCreated)
+	if height != nil {
+		body["height"] = *height
+	}
+	var result AddPanelResult
+	if err := c.doJSON(ctx, http.MethodPost, "/panels", body, http.StatusCreated, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // UpdatePanel updates the content of an existing panel (PUT /panels/{name}).
@@ -198,8 +223,8 @@ func (c *Client) ListPanels(ctx context.Context) ([]Panel, error) {
 
 // WithPanel is a scoped helper that creates a panel, calls fn, then removes
 // the panel regardless of whether fn returned an error.
-func (c *Client) WithPanel(ctx context.Context, name, title string, width int, fn func() error) error {
-	if err := c.AddPanel(ctx, name, title, width); err != nil {
+func (c *Client) WithPanel(ctx context.Context, name, title string, width int, height *int, fn func() error) error {
+	if _, err := c.AddPanel(ctx, name, title, width, height); err != nil {
 		return fmt.Errorf("add panel: %w", err)
 	}
 	defer c.RemovePanel(ctx, name) //nolint:errcheck
@@ -211,9 +236,13 @@ func (c *Client) WithPanel(ctx context.Context, name, title string, width int, f
 // ---------------------------------------------------------------------------
 
 // StartRecording begins recording (POST /recording/start).
-func (c *Client) StartRecording(ctx context.Context, name string) error {
+func (c *Client) StartRecording(ctx context.Context, name string) (*StartRecordingResult, error) {
 	body := map[string]any{"name": name}
-	return c.doSimple(ctx, http.MethodPost, "/recording/start", body, http.StatusCreated)
+	var result StartRecordingResult
+	if err := c.doJSON(ctx, http.MethodPost, "/recording/start", body, http.StatusCreated, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 // StopRecording stops the active recording (POST /recording/stop).
@@ -311,7 +340,7 @@ func (c *Client) DownloadRecordingToFile(ctx context.Context, name, filePath str
 //	if err != nil { ... }
 //	defer stop()
 func (c *Client) Recording(ctx context.Context, name string) (stop func() (*RecordingResult, error), err error) {
-	if err := c.StartRecording(ctx, name); err != nil {
+	if _, err := c.StartRecording(ctx, name); err != nil {
 		return nil, err
 	}
 	return func() (*RecordingResult, error) {
@@ -439,6 +468,46 @@ func (c *Client) WaitForComposition(ctx context.Context, name string, timeout ti
 		case <-ticker.C:
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Layout validation / Testcard
+// ---------------------------------------------------------------------------
+
+// ValidateLayout checks whether the current panel layout fits within the
+// display (GET /validate-layout).
+func (c *Client) ValidateLayout(ctx context.Context) (*LayoutValidation, error) {
+	var v LayoutValidation
+	if err := c.doJSON(ctx, http.MethodGet, "/validate-layout", nil, http.StatusOK, &v); err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// Testcard returns an SVG test card image for the current display and panel
+// layout (GET /testcard).
+func (c *Client) Testcard(ctx context.Context) (string, error) {
+	if err := c.ensureReady(ctx); err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/testcard", nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return "", &RecorderError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(b)}
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // ---------------------------------------------------------------------------

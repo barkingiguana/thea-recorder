@@ -732,3 +732,126 @@ class TestPanelScrolling:
         content = self._read_panel(r, "empty")
         assert content == ""
         r.cleanup()
+
+
+class TestPanelHeight:
+    def test_add_panel_with_height(self):
+        r = Recorder()
+        r.add_panel("short", height=100)
+        assert r._panels["short"]["height"] == 100
+        r.cleanup()
+
+    def test_add_panel_default_height_is_none(self):
+        r = Recorder()
+        r.add_panel("default")
+        assert r._panels["default"]["height"] is None
+        r.cleanup()
+
+    def test_panel_bar_height_no_panels(self):
+        r = Recorder()
+        assert r.panel_bar_height == 0
+
+    def test_panel_bar_height_default_panels(self):
+        r = Recorder()
+        r.add_panel("a")
+        r.add_panel("b")
+        assert r.panel_bar_height == PANEL_HEIGHT
+        r.cleanup()
+
+    def test_panel_bar_height_explicit_heights(self):
+        r = Recorder()
+        r.add_panel("small", height=100)
+        r.add_panel("big", height=500)
+        assert r.panel_bar_height == 500
+        r.cleanup()
+
+    def test_panel_bar_height_mixed(self):
+        r = Recorder()
+        r.add_panel("default_h")  # None -> PANEL_HEIGHT
+        r.add_panel("short", height=50)
+        assert r.panel_bar_height == PANEL_HEIGHT
+        r.cleanup()
+
+    def test_panel_bar_height_tall_overrides_default(self):
+        r = Recorder()
+        r.add_panel("default_h")  # None -> PANEL_HEIGHT
+        r.add_panel("tall", height=500)
+        assert r.panel_bar_height == 500
+        r.cleanup()
+
+    def test_short_panel_fewer_visible_lines(self):
+        r = Recorder()
+        r.add_panel("short", height=60)
+        # With height=60, visible_lines = (60-28)//18 = 1
+        lines = [f"line {i}" for i in range(10)]
+        r.update_panel("short", "\n".join(lines))
+        with open(r._panels["short"]["path"]) as f:
+            content = f.read()
+        # Should have scrolling indicators
+        assert "more above" in content
+        r.cleanup()
+
+
+class TestValidateLayout:
+    def test_no_panels_valid(self):
+        r = Recorder(display_size="1920x1080")
+        assert r.validate_layout() == []
+
+    def test_valid_layout_with_panels(self):
+        r = Recorder(display_size="1920x1080")
+        r.add_panel("status", width=120)
+        r.add_panel("log")
+        warnings = r.validate_layout()
+        assert warnings == []
+        r.cleanup()
+
+    def test_overallocated_bar_warns(self):
+        r = Recorder(display_size="1920x1080")
+        r.add_panel("huge", height=500)
+        warnings = r.validate_layout()
+        assert any("allocated" in w for w in warnings)
+        r.cleanup()
+
+    def test_add_panel_returns_warnings(self):
+        r = Recorder(display_size="1920x1080")
+        warnings = r.add_panel("huge", height=500)
+        assert isinstance(warnings, list)
+        assert any("allocated" in w for w in warnings)
+        r.cleanup()
+
+    def test_fixed_width_panels_exceeding_canvas(self):
+        r = Recorder(display_size="800x600")
+        r.add_panel("a", width=500)
+        r.add_panel("b", width=500)
+        warnings = r.validate_layout()
+        assert any("beyond canvas width" in w for w in warnings)
+        r.cleanup()
+
+
+class TestGenerateTestcard:
+    def test_returns_svg(self):
+        r = Recorder(display_size="1920x1080")
+        svg = r.generate_testcard()
+        assert svg.startswith("<svg")
+        assert "</svg>" in svg
+
+    def test_contains_viewport(self):
+        r = Recorder(display_size="1920x1080")
+        svg = r.generate_testcard()
+        assert "viewport" in svg
+
+    def test_contains_panel_names(self):
+        r = Recorder(display_size="1920x1080")
+        r.add_panel("status", title="Status", width=120)
+        r.add_panel("log", title="Log")
+        svg = r.generate_testcard()
+        assert "status" in svg
+        assert "log" in svg
+        r.cleanup()
+
+    def test_includes_warnings(self):
+        r = Recorder(display_size="1920x1080")
+        r.add_panel("huge", height=500)
+        svg = r.generate_testcard()
+        assert "Warnings" in svg
+        r.cleanup()

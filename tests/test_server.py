@@ -443,3 +443,75 @@ class TestMalformedRequests:
     def test_nonexistent_route(self, client):
         resp = client.get("/nonexistent")
         assert resp.status_code == 404
+
+
+class TestLayoutValidation:
+    def test_validate_layout_no_panels(self, client):
+        resp = client.get("/validate-layout")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["valid"] is True
+        assert data["warnings"] == []
+
+    def test_validate_layout_with_panels(self, client):
+        client.post("/panels", json={"name": "status", "width": 120})
+        client.post("/panels", json={"name": "log"})
+        resp = client.get("/validate-layout")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["valid"] is True
+
+    def test_validate_layout_overallocated_bar(self, client):
+        client.post("/panels", json={"name": "huge", "height": 500})
+        resp = client.get("/validate-layout")
+        data = resp.get_json()
+        assert data["valid"] is False
+        assert any("allocated" in w for w in data["warnings"])
+
+    def test_add_panel_with_height(self, client):
+        resp = client.post("/panels", json={"name": "short", "height": 100})
+        assert resp.status_code == 201
+        data = resp.get_json()
+        assert data["height"] == 100
+
+    def test_add_panel_invalid_height_type(self, client):
+        resp = client.post("/panels", json={"name": "bad", "height": "tall"})
+        assert resp.status_code == 400
+
+    def test_add_panel_negative_height(self, client):
+        resp = client.post("/panels", json={"name": "bad", "height": -10})
+        assert resp.status_code == 400
+
+    def test_add_panel_returns_warnings(self, client):
+        resp = client.post("/panels", json={"name": "huge", "height": 500})
+        data = resp.get_json()
+        assert "warnings" in data
+        assert any("allocated" in w for w in data["warnings"])
+
+    def test_start_recording_returns_warnings(self, client):
+        client.post("/panels", json={"name": "huge", "height": 500})
+        resp = client.post("/recording/start", json={"name": "test"})
+        data = resp.get_json()
+        assert "warnings" in data
+
+    def test_testcard_returns_svg(self, client):
+        resp = client.get("/testcard")
+        assert resp.status_code == 200
+        assert resp.content_type == "image/svg+xml; charset=utf-8"
+        assert b"<svg" in resp.data
+
+    def test_testcard_with_panels(self, client):
+        client.post("/panels", json={"name": "status", "width": 120})
+        resp = client.get("/testcard")
+        assert b"status" in resp.data
+
+    def test_session_validate_layout(self, client):
+        client.post("/sessions", json={"name": "test_sess"})
+        resp = client.get("/sessions/test_sess/validate-layout")
+        assert resp.status_code == 200
+
+    def test_session_testcard(self, client):
+        client.post("/sessions", json={"name": "test_sess"})
+        resp = client.get("/sessions/test_sess/testcard")
+        assert resp.status_code == 200
+        assert b"<svg" in resp.data

@@ -159,9 +159,8 @@ describe("RecorderClient", () => {
   // -- Panels -------------------------------------------------------------
 
   it("addPanel", async () => {
-    await expect(
-      client.addPanel({ name: "editor", title: "Editor", width: 80 }),
-    ).resolves.toBeUndefined();
+    const result = await client.addPanel({ name: "editor", title: "Editor", width: 80 });
+    expect(result).toBeDefined();
   });
 
   it("updatePanel", async () => {
@@ -182,7 +181,8 @@ describe("RecorderClient", () => {
   // -- Recording ----------------------------------------------------------
 
   it("startRecording", async () => {
-    await expect(client.startRecording("demo")).resolves.toBeUndefined();
+    const result = await client.startRecording("demo");
+    expect(result).toBeDefined();
   });
 
   it("stopRecording", async () => {

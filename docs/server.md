@@ -65,15 +65,26 @@ curl -X POST http://localhost:9123/display/stop
 ```bash
 curl -X POST http://localhost:9123/panels \
   -H "Content-Type: application/json" \
-  -d '{"name": "status", "title": "Status", "width": 120}'
+  -d '{"name": "status", "title": "Status", "width": 120, "height": 200}'
 ```
 **Response** `201`:
 ```json
-{"name": "status", "title": "Status", "width": 120}
+{"name": "status", "title": "Status", "width": 120, "height": 200}
 ```
-`width` is optional (null = auto-width). `title` defaults to empty string.
 
-**Error** `400` if `name` is missing or `width` is invalid.
+| Field | Required | Description |
+|---|---|---|
+| `name` | yes | Unique panel identifier |
+| `title` | no | Bold heading (default: empty string) |
+| `width` | no | Fixed width in pixels (`null` = auto-width, `<= 0` treated as auto) |
+| `height` | no | Panel height in pixels (`null` = use bar height default of 300px) |
+
+The response includes a `warnings` array if there are layout validation issues:
+```json
+{"name": "huge", "title": "", "width": null, "height": 500, "warnings": ["Panel bar needs 500px but only 300px was allocated..."]}
+```
+
+**Error** `400` if `name` is missing, `width` is not an integer, or `height` is not a positive integer.
 
 #### List panels
 ```bash
@@ -120,6 +131,12 @@ curl -X POST http://localhost:9123/recording/start \
 ```json
 {"status": "recording", "name": "login_test"}
 ```
+
+If there are layout validation issues, the response includes a `warnings` array:
+```json
+{"status": "recording", "name": "login_test", "warnings": ["Panel bar needs 500px but only 300px was allocated..."]}
+```
+
 **Error** `409` if already recording. `400` if `name` is missing.
 
 #### Stop recording
@@ -201,6 +218,29 @@ curl http://localhost:9123/recordings/login_test/info
   "created": "2026-03-10T14:30:00+00:00"
 }
 ```
+
+### Layout Validation
+
+#### Validate layout
+```bash
+curl http://localhost:9123/validate-layout
+```
+**Response** `200`:
+```json
+{"warnings": [], "valid": true}
+```
+
+Checks for overlapping panels, panels exceeding the canvas width, and panel bar height exceeding the allocated display space.
+
+#### Testcard
+```bash
+curl http://localhost:9123/testcard > layout.svg
+```
+**Response** `200` with `Content-Type: image/svg+xml`.
+
+Returns an SVG testcard image showing the spatial layout of the viewport and all panels, with dimensions and positions labelled. Any validation warnings are displayed at the bottom.
+
+Both endpoints are also available under `/sessions/{name}/validate-layout` and `/sessions/{name}/testcard`.
 
 ### Utility
 
