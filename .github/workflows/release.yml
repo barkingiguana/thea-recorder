@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   check:
@@ -131,4 +132,43 @@ jobs:
           gh release create "v${VER}" \
             --title "v${VER}" \
             --notes "${{ steps.notes.outputs.notes }}"
+
+  python:
+    name: Publish Python to PyPI
+    needs: release
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.version }}
+      - uses: astral-sh/setup-uv@v4
+      - run: uv build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  go:
+    name: Publish Go SDK
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.version }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: sdks/go/go.mod
+      - run: cd sdks/go && go test ./thea/ -v
+      - run: cd sdks/go && go vet ./thea/
+      - name: Tag Go module
+        run: |
+          VER="${{ needs.release.outputs.version }}"
+          TAG="sdks/go/v${VER}"
+          git tag "$TAG"
+          git push origin "$TAG"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
