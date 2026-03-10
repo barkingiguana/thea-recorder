@@ -315,7 +315,7 @@ def cleanup(ctx):
 @click.pass_context
 def version(ctx):
     """Print the recorder version."""
-    _print_result({"version": "0.2.0"}, ctx.obj["quiet"], ctx.obj["pretty"])
+    _print_result({"version": "0.3.0"}, ctx.obj["quiet"], ctx.obj["pretty"])
 
 
 # ── Parallel mode ─────────────────────────────────────────────────────────
