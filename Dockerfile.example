@@ -1,0 +1,36 @@
+# Example Dockerfile for running E2E tests with video recording.
+#
+# Usage:
+#   docker build -f Dockerfile.example -t my-e2e-tests .
+#   docker run --shm-size=2g -v $(pwd)/recordings:/app/recordings my-e2e-tests
+
+FROM python:3.12-slim
+
+# System dependencies for Xvfb + ffmpeg + Chrome
+RUN apt-get update && apt-get install -qyy --no-install-recommends \
+    chromium-driver \
+    xvfb \
+    ffmpeg \
+    x11-xserver-utils \
+    xdotool \
+    fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV DISPLAY=:99
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Install the recorder
+COPY . /app/recorder-pkg
+RUN pip install /app/recorder-pkg
+
+# Install your test dependencies (customise this)
+# COPY requirements.txt .
+# RUN pip install -r requirements.txt
+
+# Copy your test code
+# COPY features/ features/
+
+# Run tests
+# ENTRYPOINT ["behave", "--no-capture"]

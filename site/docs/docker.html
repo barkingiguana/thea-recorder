@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docker &amp; CI — thea-recorder docs</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topnav">
+    <a href="../index.html" class="topnav-brand">
+        <span class="topnav-rec"></span>
+        <span>thea-recorder</span>
+    </a>
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+    </button>
+    <ul class="topnav-links">
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="https://github.com/BarkingIguana/thea-recorder">GitHub</a></li>
+    </ul>
+</header>
+
+<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+<aside class="sidebar">
+    <div class="sidebar-section">
+        <h3>Getting Started</h3>
+        <ul>
+            <li><a href="index.html">Quick Start</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>Reference</h3>
+        <ul>
+            <li><a href="server.html">Server &amp; API</a></li>
+            <li><a href="sdks.html">SDKs</a></li>
+            <li><a href="cli.html">CLI</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>Deployment</h3>
+        <ul>
+            <li><a href="docker.html" class="active">Docker &amp; CI</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>On this page</h3>
+        <ul>
+            <li><a href="#dockerfile">Dockerfile</a></li>
+            <li><a href="#docker-run">Docker run</a></li>
+            <li><a href="#compose">Docker Compose</a></li>
+            <li><a href="#github-actions">GitHub Actions</a></li>
+            <li><a href="#github-actions-full">Full GitHub Actions Example</a></li>
+            <li><a href="#gitlab-ci">GitLab CI</a></li>
+            <li><a href="#tips">Tips</a></li>
+        </ul>
+    </div>
+</aside>
+
+<main class="content">
+    <h1>Docker &amp; CI
+        <span class="subtitle">Run the recorder server in containers and CI pipelines</span>
+    </h1>
+
+    <p class="lead">
+        The recorder server needs Xvfb and ffmpeg, which makes Docker ideal for CI.
+        Your test code runs outside the container and talks to it over HTTP.
+    </p>
+
+    <div class="callout note">
+        <strong>Architecture reminder</strong>
+        The recorder server (with Xvfb + ffmpeg) runs inside the container.
+        Your tests run wherever you like and connect via an SDK or curl.
+        Only the server container needs system dependencies.
+    </div>
+
+    <!-- ─── DOCKERFILE ─── -->
+    <h2 id="dockerfile">Dockerfile</h2>
+
+<pre><code><span class="kw">FROM</span> python:3.12-slim
+
+<span class="cm"># System deps for virtual display + recording</span>
+<span class="kw">RUN</span> apt-get update && apt-get install -y --no-install-recommends \
+    xvfb \
+    ffmpeg \
+    fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+
+<span class="cm"># Install thea-recorder</span>
+<span class="kw">RUN</span> pip install --no-cache-dir thea-recorder
+
+<span class="cm"># Recording output directory</span>
+<span class="kw">RUN</span> mkdir -p /recordings
+<span class="kw">VOLUME</span> /recordings
+
+<span class="kw">EXPOSE</span> 9123
+
+<span class="kw">ENTRYPOINT</span> ["thea", "serve", \
+    "--port", "9123", \
+    "--output-dir", "/recordings"]</code><span class="lang-label">dockerfile</span></pre>
+
+    <p>Build it:</p>
+
+<pre><code><span class="cmd">docker build</span> -t thea-recorder .</code><span class="lang-label">bash</span></pre>
+
+    <!-- ─── DOCKER RUN ─── -->
+    <h2 id="docker-run">Docker run</h2>
+
+<pre><code><span class="cmd">docker run</span> -d \
+  --name recorder \
+  --shm-size=2g \
+  -p 9123:9123 \
+  -v $(pwd)/recordings:/recordings \
+  thea-recorder</code><span class="lang-label">bash</span></pre>
+
+    <div class="callout warn">
+        <strong>Important</strong>
+        Always set <code>--shm-size=2g</code> or higher. Xvfb and Chrome use shared memory extensively.
+        Without it, you will get crashes or blank recordings.
+    </div>
+
+    <p>Then from your host (or any machine that can reach the container):</p>
+
+<pre><code><span class="cm"># Health check</span>
+<span class="cmd">curl</span> http://localhost:9123/health
+
+<span class="cm"># Or use any SDK</span>
+<span class="cmd">thea</span> <span class="flag">--server</span> http://localhost:9123 health</code><span class="lang-label">bash</span></pre>
+
+    <!-- ─── COMPOSE ─── -->
+    <h2 id="compose">Docker Compose</h2>
+
+    <p>Run the recorder server alongside your test suite:</p>
+
+<pre><code><span class="cm"># docker-compose.yml</span>
+<span class="kw">services</span>:
+  <span class="fn">recorder</span>:
+    <span class="kw">image</span>: thea-recorder
+    <span class="kw">shm_size</span>: <span class="str">"2g"</span>
+    <span class="kw">ports</span>:
+      - <span class="str">"9123:9123"</span>
+    <span class="kw">volumes</span>:
+      - ./recordings:/recordings
+    <span class="kw">healthcheck</span>:
+      <span class="kw">test</span>: [<span class="str">"CMD"</span>, <span class="str">"curl"</span>, <span class="str">"-f"</span>, <span class="str">"http://localhost:9123/health"</span>]
+      <span class="kw">interval</span>: <span class="val">5s</span>
+      <span class="kw">timeout</span>: <span class="val">3s</span>
+      <span class="kw">retries</span>: <span class="val">10</span>
+
+  <span class="fn">tests</span>:
+    <span class="kw">build</span>: .
+    <span class="kw">depends_on</span>:
+      <span class="fn">recorder</span>:
+        <span class="kw">condition</span>: service_healthy
+    <span class="kw">environment</span>:
+      - RECORDER_URL=http://recorder:9123
+    <span class="kw">volumes</span>:
+      - ./recordings:/recordings</code><span class="lang-label">yaml</span></pre>
+
+    <p>Run everything:</p>
+
+<pre><code><span class="cmd">docker compose up</span> <span class="flag">--abort-on-container-exit</span> <span class="flag">--exit-code-from</span> tests</code><span class="lang-label">bash</span></pre>
+
+    <p>After the run, recordings are in <code>./recordings/</code> on your host.</p>
+
+    <!-- ─── GITHUB ACTIONS ─── -->
+    <h2 id="github-actions">GitHub Actions</h2>
+
+    <p>
+        The simplest setup uses a <strong>service container</strong> to run the recorder alongside your tests.
+        After the run, upload the recordings and HTML report as artifacts so the whole team can review them.
+    </p>
+
+<pre><code><span class="cm"># .github/workflows/e2e.yml</span>
+<span class="kw">name</span>: E2E Tests
+<span class="kw">on</span>: [push, pull_request]
+
+<span class="kw">jobs</span>:
+  <span class="fn">e2e</span>:
+    <span class="kw">runs-on</span>: ubuntu-latest
+
+    <span class="kw">services</span>:
+      <span class="fn">recorder</span>:
+        <span class="kw">image</span>: ghcr.io/mechanicalrock/thea-recorder:latest
+        <span class="kw">ports</span>:
+          - 9123:9123
+        <span class="kw">options</span>: <span class="str">--shm-size=2g</span>
+
+    <span class="kw">steps</span>:
+      - <span class="kw">uses</span>: actions/checkout@v4
+
+      - <span class="kw">name</span>: Wait for recorder
+        <span class="kw">run</span>: |
+          <span class="kw">for</span> i <span class="kw">in</span> $(seq 1 30); <span class="kw">do</span>
+            curl -sf http://localhost:9123/health && break
+            sleep 1
+          <span class="kw">done</span>
+
+      - <span class="kw">name</span>: Run tests
+        <span class="kw">env</span>:
+          <span class="fn">RECORDER_URL</span>: http://localhost:9123
+        <span class="kw">run</span>: |
+          pip install thea-recorder
+          pytest tests/
+
+      - <span class="kw">name</span>: Download recordings
+        <span class="kw">if</span>: always()
+        <span class="kw">run</span>: |
+          mkdir -p recordings
+          <span class="cm"># List all recordings and download each video</span>
+          <span class="kw">for</span> name <span class="kw">in</span> $(curl -s http://localhost:9123/recordings | jq -r '.[].name'); <span class="kw">do</span>
+            curl -s "http://localhost:9123/recordings/$name/video" -o "recordings/$name.mp4"
+          <span class="kw">done</span>
+          <span class="cm"># Download the HTML report</span>
+          curl -s http://localhost:9123/report -o recordings/report.html
+
+      - <span class="kw">name</span>: Upload recordings &amp; report
+        <span class="kw">if</span>: always()
+        <span class="kw">uses</span>: actions/upload-artifact@v4
+        <span class="kw">with</span>:
+          <span class="kw">name</span>: test-recordings
+          <span class="kw">path</span>: recordings/</code><span class="lang-label">yaml</span></pre>
+
+    <div class="callout tip">
+        <strong>Tip</strong>
+        Use <code>if: always()</code> on the download and upload steps so you get recordings even when tests fail.
+        Failed test recordings are the ones you most want to watch.
+    </div>
+
+    <p>
+        After the workflow completes, the <strong>test-recordings</strong> artifact appears on the
+        Actions run summary page. Download the zip — it contains every MP4 video and the interactive
+        HTML report. Open <code>report.html</code> in a browser, click any test step, and the video
+        seeks to that exact moment.
+    </p>
+
+    <!-- ─── FULL GITHUB ACTIONS ─── -->
+    <h2 id="github-actions-full">Full GitHub Actions Example</h2>
+
+    <p>
+        A more complete example showing how to use the Python SDK inside your test code,
+        record multiple scenarios, and publish both videos and the report as downloadable artifacts.
+    </p>
+
+<pre><code><span class="cm"># .github/workflows/e2e-full.yml</span>
+<span class="kw">name</span>: E2E with Recordings
+<span class="kw">on</span>:
+  <span class="kw">pull_request</span>:
+  <span class="kw">push</span>:
+    <span class="kw">branches</span>: [main]
+
+<span class="kw">jobs</span>:
+  <span class="fn">e2e</span>:
+    <span class="kw">runs-on</span>: ubuntu-latest
+
+    <span class="kw">services</span>:
+      <span class="fn">recorder</span>:
+        <span class="kw">image</span>: ghcr.io/mechanicalrock/thea-recorder:latest
+        <span class="kw">ports</span>:
+          - 9123:9123
+        <span class="kw">options</span>: <span class="str">--shm-size=2g --health-cmd "curl -f http://localhost:9123/health" --health-interval 5s --health-retries 10</span>
+
+    <span class="kw">steps</span>:
+      - <span class="kw">uses</span>: actions/checkout@v4
+
+      - <span class="kw">name</span>: Set up Python
+        <span class="kw">uses</span>: actions/setup-python@v5
+        <span class="kw">with</span>:
+          <span class="fn">python-version</span>: "3.12"
+
+      - <span class="kw">name</span>: Install dependencies
+        <span class="kw">run</span>: |
+          pip install thea-recorder pytest
+
+      - <span class="kw">name</span>: Start display &amp; add panels
+        <span class="kw">run</span>: |
+          <span class="cm"># Start the virtual display</span>
+          thea --server http://localhost:9123 start-display
+          <span class="cm"># Add a panel to show what's happening</span>
+          thea --server http://localhost:9123 add-panel editor "App Under Test" 80
+
+      - <span class="kw">name</span>: Run test suite
+        <span class="kw">env</span>:
+          <span class="fn">RECORDER_URL</span>: http://localhost:9123
+        <span class="kw">run</span>: |
+          pytest tests/ -v --tb=short
+
+      - <span class="kw">name</span>: Collect recordings
+        <span class="kw">if</span>: always()
+        <span class="kw">run</span>: |
+          mkdir -p artifacts/videos
+          <span class="cm"># Download every recording as MP4</span>
+          <span class="kw">for</span> name <span class="kw">in</span> $(curl -s http://localhost:9123/recordings | jq -r '.[].name'); <span class="kw">do</span>
+            echo "Downloading $name..."
+            curl -s "http://localhost:9123/recordings/$name/video" \
+              -o "artifacts/videos/$name.mp4"
+          <span class="kw">done</span>
+          <span class="cm"># Download the HTML report</span>
+          curl -s http://localhost:9123/report -o artifacts/report.html
+          echo "Downloaded $(ls artifacts/videos/*.mp4 | wc -l) recordings"
+
+      - <span class="kw">name</span>: Upload videos
+        <span class="kw">if</span>: always()
+        <span class="kw">uses</span>: actions/upload-artifact@v4
+        <span class="kw">with</span>:
+          <span class="kw">name</span>: e2e-videos
+          <span class="kw">path</span>: artifacts/videos/
+          <span class="fn">retention-days</span>: 14
+
+      - <span class="kw">name</span>: Upload report
+        <span class="kw">if</span>: always()
+        <span class="kw">uses</span>: actions/upload-artifact@v4
+        <span class="kw">with</span>:
+          <span class="kw">name</span>: e2e-report
+          <span class="kw">path</span>: artifacts/report.html
+          <span class="fn">retention-days</span>: 30</code><span class="lang-label">yaml</span></pre>
+
+    <div class="callout note">
+        <strong>How it works</strong>
+        <ol style="margin: 0.5em 0 0 1.2em; padding: 0;">
+            <li>The recorder runs as a <strong>service container</strong> — GitHub provisions it alongside your job.</li>
+            <li>Your tests talk to it on <code>http://localhost:9123</code> using any SDK or curl.</li>
+            <li>Each test starts/stops a recording. The recorder keeps videos in memory.</li>
+            <li>After tests finish, you <strong>download videos via HTTP API</strong> — <code>/recordings/{name}/video</code>.</li>
+            <li>The HTML report is served at <code>/report</code> and embeds clickable timestamps per step.</li>
+            <li><code>upload-artifact</code> makes everything available on the Actions summary page.</li>
+        </ol>
+    </div>
+
+    <h3>Using the SDK in your tests</h3>
+
+    <p>Here's what a test file might look like with the Python SDK:</p>
+
+<pre><code><span class="kw">import</span> os
+<span class="kw">from</span> thea <span class="kw">import</span> RecorderClient
+
+client = RecorderClient(os.environ[<span class="str">"RECORDER_URL"</span>])
+
+<span class="kw">def</span> <span class="fn">test_invoice_submission</span>():
+    client.start_recording(<span class="str">"invoice-submission"</span>)
+    client.update_panel(<span class="str">"editor"</span>, <span class="str">"Submitting invoice INV-042..."</span>)
+
+    <span class="cm"># ... your actual test code here ...</span>
+
+    client.update_panel(<span class="str">"editor"</span>, <span class="str">"Invoice submitted successfully"</span>)
+    result = client.stop_recording()
+    <span class="kw">assert</span> result[<span class="str">"path"</span>]
+
+<span class="kw">def</span> <span class="fn">test_tax_calculation</span>():
+    client.start_recording(<span class="str">"tax-calculation"</span>)
+    client.update_panel(<span class="str">"editor"</span>, <span class="str">"Running tax calculation..."</span>)
+
+    <span class="cm"># ... your actual test code here ...</span>
+
+    result = client.stop_recording()
+    <span class="kw">assert</span> result[<span class="str">"path"</span>]</code><span class="lang-label">python</span></pre>
+
+    <p>
+        Each test produces its own named recording. After the suite finishes, the collect step
+        downloads all videos and the report in one pass.
+    </p>
+
+    <h3>Viewing artifacts</h3>
+
+    <p>
+        After the workflow runs, go to the <strong>Actions</strong> tab in your repo, click the run,
+        and scroll to <strong>Artifacts</strong>. You'll see:
+    </p>
+
+    <ul>
+        <li><strong>e2e-videos</strong> — a zip of all MP4 recordings, one per test scenario</li>
+        <li><strong>e2e-report</strong> — the interactive HTML report you can open locally</li>
+    </ul>
+
+    <p>
+        Share the report link with QA, attach it to PRs, or use it to investigate failures.
+        The video evidence makes it easy to communicate exactly what happened.
+    </p>
+
+    <!-- ─── GITLAB ─── -->
+    <h2 id="gitlab-ci">GitLab CI</h2>
+
+<pre><code><span class="cm"># .gitlab-ci.yml</span>
+<span class="fn">e2e</span>:
+  <span class="kw">image</span>: python:3.12
+  <span class="kw">services</span>:
+    - <span class="kw">name</span>: thea-recorder
+      <span class="kw">alias</span>: recorder
+  <span class="kw">variables</span>:
+    <span class="fn">RECORDER_URL</span>: http://recorder:9123
+  <span class="kw">before_script</span>:
+    - pip install thea-recorder
+    - |
+      <span class="kw">for</span> i <span class="kw">in</span> $(seq 1 30); <span class="kw">do</span>
+        curl -sf $RECORDER_URL/health && break
+        sleep 1
+      <span class="kw">done</span>
+  <span class="kw">script</span>:
+    - pytest tests/e2e/
+  <span class="kw">artifacts</span>:
+    <span class="kw">when</span>: always
+    <span class="kw">paths</span>:
+      - recordings/</code><span class="lang-label">yaml</span></pre>
+
+    <hr>
+
+    <!-- ─── TIPS ─── -->
+    <h2 id="tips">Tips</h2>
+
+    <ul>
+        <li><strong>Always set <code>--shm-size=2g</code></strong> (or higher) in Docker. Chrome and Xvfb need shared memory. Without it you will get crashes.</li>
+        <li><strong>Mount a volume</strong> for the recordings directory so you can access videos after the container exits.</li>
+        <li><strong>Use the healthcheck</strong> in Compose or <code>wait_until_ready()</code> in your SDK. The server may take a moment to start, especially in resource-constrained CI environments.</li>
+        <li><strong>Graceful shutdown works.</strong> The server handles <code>SIGTERM</code>, so <code>docker stop</code> will not lose a recording in progress.</li>
+        <li><strong>Upload artifacts on failure.</strong> Always upload recordings even when tests fail &mdash; those are the videos you most want to watch.</li>
+        <li><strong>Font rendering:</strong> Install <code>fonts-liberation</code> or similar in your image for readable text in panel overlays.</li>
+    </ul>
+
+</main>
+
+<script>
+function toggleSidebar() {
+    document.querySelector('.sidebar').classList.toggle('open');
+    document.querySelector('.sidebar-overlay').classList.toggle('open');
+}
+</script>
+</body>
+</html>

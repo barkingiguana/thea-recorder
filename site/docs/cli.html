@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLI Reference — thea-recorder docs</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topnav">
+    <a href="../index.html" class="topnav-brand">
+        <span class="topnav-rec"></span>
+        <span>thea-recorder</span>
+    </a>
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+    </button>
+    <ul class="topnav-links">
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="https://github.com/BarkingIguana/thea-recorder">GitHub</a></li>
+    </ul>
+</header>
+
+<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+<aside class="sidebar">
+    <div class="sidebar-section">
+        <h3>Getting Started</h3>
+        <ul>
+            <li><a href="index.html">Quick Start</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>Reference</h3>
+        <ul>
+            <li><a href="server.html">Server &amp; API</a></li>
+            <li><a href="sdks.html">SDKs</a></li>
+            <li><a href="cli.html" class="active">CLI</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>Deployment</h3>
+        <ul>
+            <li><a href="docker.html">Docker &amp; CI</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>On this page</h3>
+        <ul>
+            <li><a href="#modes">Two modes</a></li>
+            <li><a href="#server-mode">Server mode</a></li>
+            <li><a href="#client-mode">Client mode</a></li>
+            <li><a href="#display">Display commands</a></li>
+            <li><a href="#panels">Panel commands</a></li>
+            <li><a href="#recording">Recording commands</a></li>
+            <li><a href="#files">File commands</a></li>
+            <li><a href="#utility">Utility commands</a></li>
+            <li><a href="#scripting">Scripting examples</a></li>
+            <li><a href="#errors">Error messages</a></li>
+        </ul>
+    </div>
+</aside>
+
+<main class="content">
+    <h1>CLI Reference
+        <span class="subtitle">Server and client commands</span>
+    </h1>
+
+    <p class="lead">
+        The <code>thea</code> command is automatically available after <code>pip install thea-recorder</code>.
+        It has two modes: server mode and client mode.
+    </p>
+
+    <!-- ─── MODES ─── -->
+    <h2 id="modes">Two modes</h2>
+
+    <table>
+        <thead>
+            <tr><th>Mode</th><th>What it does</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><strong>Server mode</strong></td><td><code>thea serve</code> starts a long-running HTTP server</td></tr>
+            <tr><td><strong>Client mode</strong></td><td>All other subcommands send HTTP requests to a running server</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ─── SERVER ─── -->
+    <h2 id="server-mode">Server mode</h2>
+
+<pre><code><span class="cmd">thea</span> serve <span class="flag">--port</span> <span class="val">9123</span> <span class="flag">--output-dir</span> <span class="val">./recordings</span></code><span class="lang-label">bash</span></pre>
+
+    <p>See <a href="server.html">Server &amp; API Reference</a> for all server options and the full REST API.</p>
+
+    <!-- ─── CLIENT ─── -->
+    <h2 id="client-mode">Client mode</h2>
+
+    <p>Every client command talks to a running server via HTTP.</p>
+
+    <h3>Server URL configuration</h3>
+
+    <table>
+        <thead>
+            <tr><th>Method</th><th>Example</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><code>--server</code> flag</td><td><code>thea --server http://host:9123 health</code></td></tr>
+            <tr><td><code>RECORDER_URL</code> env</td><td><code>export RECORDER_URL=http://host:9123</code></td></tr>
+            <tr><td>Default</td><td><code>http://localhost:9123</code></td></tr>
+        </tbody>
+    </table>
+
+    <h3>Output flags</h3>
+
+    <table>
+        <thead>
+            <tr><th>Flag</th><th>Effect</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>(default)</td><td>JSON output, one line</td></tr>
+            <tr><td><code>--pretty</code></td><td>Indented JSON</td></tr>
+            <tr><td><code>--quiet</code></td><td>No output (exit code only)</td></tr>
+        </tbody>
+    </table>
+
+    <p>Non-zero exit code on any error.</p>
+
+    <!-- ─── COMMANDS ─── -->
+    <h2 id="display">Display</h2>
+
+<pre><code><span class="cm"># Start the virtual display</span>
+<span class="cmd">thea</span> start-display
+
+<span class="cm"># Stop the virtual display</span>
+<span class="cmd">thea</span> stop-display</code><span class="lang-label">bash</span></pre>
+
+    <h2 id="panels">Panels</h2>
+
+<pre><code><span class="cm"># Add a panel</span>
+<span class="cmd">thea</span> add-panel <span class="flag">--name</span> status <span class="flag">--title</span> Status <span class="flag">--width</span> 120
+
+<span class="cm"># Update panel content</span>
+<span class="cmd">thea</span> update-panel <span class="flag">--name</span> status <span class="flag">--text</span> <span class="str">"Running step 3"</span> <span class="flag">--focus-line</span> 5
+
+<span class="cm"># Remove a panel</span>
+<span class="cmd">thea</span> remove-panel <span class="flag">--name</span> status</code><span class="lang-label">bash</span></pre>
+
+    <h2 id="recording">Recording</h2>
+
+<pre><code><span class="cm"># Start recording</span>
+<span class="cmd">thea</span> start-recording <span class="flag">--name</span> login_test
+
+<span class="cm"># Check elapsed time</span>
+<span class="cmd">thea</span> elapsed
+
+<span class="cm"># Stop recording (prints path and elapsed)</span>
+<span class="cmd">thea</span> stop-recording</code><span class="lang-label">bash</span></pre>
+
+    <h2 id="files">File operations</h2>
+
+<pre><code><span class="cm"># List all recordings</span>
+<span class="cmd">thea</span> list-recordings
+
+<span class="cm"># Download a recording</span>
+<span class="cmd">thea</span> download <span class="flag">--name</span> login_test <span class="flag">--output</span> ./login_test.mp4</code><span class="lang-label">bash</span></pre>
+
+    <h2 id="utility">Utility</h2>
+
+<pre><code><span class="cm"># Health check</span>
+<span class="cmd">thea</span> health
+
+<span class="cm"># Full teardown</span>
+<span class="cmd">thea</span> cleanup
+
+<span class="cm"># Version</span>
+<span class="cmd">thea</span> version</code><span class="lang-label">bash</span></pre>
+
+    <hr>
+
+    <!-- ─── SCRIPTING ─── -->
+    <h2 id="scripting">Scripting examples</h2>
+
+    <h3>Record a test from bash</h3>
+
+<pre><code><span class="cm">#!/bin/bash</span>
+<span class="kw">set</span> -euo pipefail
+
+<span class="kw">export</span> RECORDER_URL=http://localhost:9123
+
+<span class="cmd">thea</span> start-display
+<span class="cmd">thea</span> add-panel <span class="flag">--name</span> status <span class="flag">--title</span> Status <span class="flag">--width</span> 120
+<span class="cmd">thea</span> start-recording <span class="flag">--name</span> <span class="str">"my_test"</span>
+<span class="cmd">thea</span> update-panel <span class="flag">--name</span> status <span class="flag">--text</span> <span class="str">"Running"</span>
+
+<span class="cm"># ... run your test here ...</span>
+
+<span class="cmd">thea</span> update-panel <span class="flag">--name</span> status <span class="flag">--text</span> <span class="str">"PASSED"</span>
+RESULT=$(<span class="cmd">thea</span> stop-recording)
+echo <span class="str">"Video: $(echo $RESULT | jq -r .path)"</span>
+
+<span class="cmd">thea</span> cleanup</code><span class="lang-label">bash</span></pre>
+
+    <h3>List recordings as a table</h3>
+
+<pre><code><span class="cmd">thea</span> list-recordings <span class="flag">--pretty</span> | jq -r <span class="str">'.[] | "\(.name)\t\(.size)\t\(.created)"'</span></code><span class="lang-label">bash</span></pre>
+
+    <h3>Pipeline: record + download</h3>
+
+<pre><code><span class="cmd">thea</span> start-recording <span class="flag">--name</span> smoke_test
+sleep 10  <span class="cm"># run tests</span>
+<span class="cmd">thea</span> stop-recording <span class="flag">--quiet</span>
+<span class="cmd">thea</span> download <span class="flag">--name</span> smoke_test <span class="flag">--output</span> ./smoke_test.mp4</code><span class="lang-label">bash</span></pre>
+
+    <hr>
+
+    <!-- ─── ERRORS ─── -->
+    <h2 id="errors">Error messages</h2>
+
+    <p>When the server is unreachable:</p>
+<pre><code>Error: cannot reach recorder server at http://localhost:9123 — is 'thea serve' running?</code></pre>
+
+    <p>When a resource does not exist:</p>
+<pre><code>Error: panel 'foo' not found</code></pre>
+
+    <p>When there is a conflict:</p>
+<pre><code>Error: already recording</code></pre>
+
+</main>
+
+<script>
+function toggleSidebar() {
+    document.querySelector('.sidebar').classList.toggle('open');
+    document.querySelector('.sidebar-overlay').classList.toggle('open');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>thea-recorder — Record your E2E tests. Watch them back.</title>
+<meta name="description" content="Capture E2E browser tests as MP4 video with live panel overlays and interactive HTML reports. Minimal dependencies, easy install.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg-void: #050810;
+    --bg-deep: #0a0e17;
+    --bg-surface: #0f1420;
+    --bg-raised: #151c2b;
+    --bg-elevated: #1a2236;
+    --border-dim: #1a2035;
+    --border-subtle: #222d45;
+    --border-visible: #2a3a5c;
+    --text-bright: #e8edf5;
+    --text-primary: #c0c8d8;
+    --text-secondary: #7a879e;
+    --text-muted: #4a5568;
+    --accent: #00d4aa;
+    --accent-glow: rgba(0, 212, 170, 0.15);
+    --accent-deep: rgba(0, 212, 170, 0.06);
+    --rec-red: #f85149;
+    --rec-glow: rgba(248, 81, 73, 0.3);
+    --code-bg: #0c1018;
+    --keyword: #a78bfa;
+    --string: #7dd3fc;
+    --func: #fbbf24;
+    --comment: #4a5568;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+    font-family: 'Outfit', system-ui, sans-serif;
+    background: var(--bg-void);
+    color: var(--text-primary);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Scanline overlay on the whole page */
+body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.03) 2px,
+        rgba(0, 0, 0, 0.03) 4px
+    );
+}
+
+/* ═══════════════════════════════════════════ NAV */
+nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 0 2rem;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(5, 8, 16, 0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-dim);
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+}
+
+.nav-rec {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--rec-red);
+    box-shadow: 0 0 12px var(--rec-glow), 0 0 4px var(--rec-red);
+    animation: pulse-rec 2s ease-in-out infinite;
+}
+
+@keyframes pulse-rec {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.nav-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--text-bright);
+    letter-spacing: 0.5px;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    list-style: none;
+}
+
+.nav-links a {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.2s;
+    letter-spacing: 0.3px;
+}
+
+.nav-links a:hover { color: var(--text-bright); }
+
+.nav-pip {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    padding: 6px 16px;
+    background: var(--accent-deep);
+    border: 1px solid rgba(0, 212, 170, 0.25);
+    border-radius: 6px;
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.nav-pip:hover {
+    background: var(--accent-glow);
+    border-color: rgba(0, 212, 170, 0.5);
+}
+
+/* ═══════════════════════════════════════════ HERO */
+.hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 120px 2rem 80px;
+    overflow: hidden;
+}
+
+/* Grid background */
+.hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(0, 212, 170, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 170, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 70%);
+}
+
+/* Subtle glow orbs */
+.hero::after {
+    content: '';
+    position: absolute;
+    width: 800px;
+    height: 600px;
+    top: -100px;
+    right: -200px;
+    background: radial-gradient(circle, rgba(0, 212, 170, 0.04) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+.hero-inner {
+    position: relative;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+}
+
+.hero-text { z-index: 1; }
+
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    background: var(--accent-deep);
+    border: 1px solid rgba(0, 212, 170, 0.2);
+    border-radius: 100px;
+    padding: 6px 16px;
+    margin-bottom: 2rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.hero-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--rec-red);
+    animation: pulse-rec 2s ease-in-out infinite;
+}
+
+h1 {
+    font-size: clamp(2.5rem, 5.5vw, 4.2rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    color: var(--text-bright);
+    margin-bottom: 1.5rem;
+}
+
+h1 em {
+    font-style: normal;
+    background: linear-gradient(135deg, var(--accent), #38bdf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hero-sub {
+    font-size: 1.15rem;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    max-width: 480px;
+    margin-bottom: 2.5rem;
+    font-weight: 300;
+}
+
+.hero-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    background: var(--accent);
+    color: var(--bg-void);
+    font-weight: 600;
+    font-size: 0.95rem;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: all 0.25s;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 30px rgba(0, 212, 170, 0.25);
+}
+
+.btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.95rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    text-decoration: none;
+    transition: all 0.25s;
+}
+
+.btn-ghost:hover {
+    border-color: var(--border-visible);
+    color: var(--text-bright);
+    background: var(--bg-raised);
+}
+
+/* Hero terminal */
+.hero-terminal {
+    position: relative;
+    z-index: 1;
+}
+
+.terminal {
+    background: var(--code-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow:
+        0 24px 80px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+}
+
+.terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 18px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-dim);
+}
+
+.terminal-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--bg-elevated);
+}
+
+.terminal-dot:nth-child(1) { background: #f85149; }
+.terminal-dot:nth-child(2) { background: #f0b72f; }
+.terminal-dot:nth-child(3) { background: #3fb950; }
+
+.terminal-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-left: 8px;
+}
+
+.terminal-body {
+    padding: 1.5rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.9;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+.terminal-body .kw { color: var(--keyword); }
+.terminal-body .fn { color: var(--func); }
+.terminal-body .str { color: var(--string); }
+.terminal-body .cm { color: var(--comment); font-style: italic; }
+.terminal-body .op { color: var(--text-muted); }
+.terminal-body .dim { color: var(--text-muted); }
+.terminal-body .acc { color: var(--accent); }
+
+/* Hero language tabs */
+.hero-lang-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-dim);
+}
+
+.hero-lang-tab {
+    padding: 10px 18px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+}
+
+.hero-lang-tab:hover { color: var(--text-secondary); }
+.hero-lang-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.hero-lang-panel { display: none; }
+.hero-lang-panel.active { display: block; }
+
+/* ═══════════════════════════════════════════ INSTALL BAR */
+.install-bar {
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-dim);
+    border-bottom: 1px solid var(--border-dim);
+    padding: 1.5rem 2rem;
+}
+
+.install-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+}
+
+.install-cmd {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--accent);
+    background: var(--bg-deep);
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: 1px solid rgba(0, 212, 170, 0.15);
+    user-select: all;
+}
+
+.install-cmd::before {
+    content: '$ ';
+    color: var(--text-muted);
+}
+
+.install-deps {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.install-deps code {
+    font-family: 'Space Mono', monospace;
+    color: var(--text-secondary);
+}
+
+/* ═══════════════════════════════════════════ SECTIONS */
+section {
+    padding: 6rem 2rem;
+    position: relative;
+}
+
+.section-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-label::before {
+    content: '';
+    width: 24px;
+    height: 1px;
+    background: var(--accent);
+}
+
+h2 {
+    font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+    font-weight: 700;
+    color: var(--text-bright);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin-bottom: 1rem;
+}
+
+.section-sub {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    max-width: 600px;
+    font-weight: 300;
+    margin-bottom: 3rem;
+}
+
+/* ═══════════════════════════════════════════ WHY SECTION */
+.why-section {
+    background: var(--bg-deep);
+    border-top: 1px solid var(--border-dim);
+    border-bottom: 1px solid var(--border-dim);
+}
+
+.why-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items: start;
+}
+
+.why-problem, .why-solution {
+    padding: 2.5rem;
+    border-radius: 16px;
+    border: 1px solid var(--border-subtle);
+}
+
+.why-problem {
+    background: linear-gradient(135deg, rgba(248, 81, 73, 0.04), transparent);
+    border-color: rgba(248, 81, 73, 0.15);
+}
+
+.why-solution {
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.04), transparent);
+    border-color: rgba(0, 212, 170, 0.15);
+}
+
+.why-icon {
+    font-size: 1.4rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.why-problem .why-icon { color: var(--rec-red); }
+.why-solution .why-icon { color: var(--accent); }
+
+.why-icon-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+h3 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 1rem;
+}
+
+.why-problem p, .why-solution p {
+    font-size: 0.95rem;
+    line-height: 1.75;
+    color: var(--text-secondary);
+}
+
+.why-loop {
+    margin-top: 1.5rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    line-height: 2.2;
+    color: var(--text-muted);
+    padding: 1.25rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border-left: 2px solid var(--rec-red);
+}
+
+.why-loop .active-line {
+    color: var(--rec-red);
+}
+
+.why-instead {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    border-left: 2px solid var(--accent);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    line-height: 2.2;
+    color: var(--accent);
+}
+
+/* ═══════════════════════════════════════════ FEATURES */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+}
+
+.feature-card {
+    padding: 2rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-dim);
+    border-radius: 14px;
+    transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+    border-color: var(--border-subtle);
+    background: var(--bg-raised);
+    transform: translateY(-2px);
+}
+
+.feature-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    margin-bottom: 1.25rem;
+    background: var(--accent-deep);
+    border: 1px solid rgba(0, 212, 170, 0.15);
+}
+
+.feature-card h4 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 0.6rem;
+}
+
+.feature-card p {
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: var(--text-secondary);
+    font-weight: 300;
+}
+
+/* ═══════════════════════════════════════════ CODE EXAMPLES */
+.examples-section {
+    background: var(--bg-deep);
+    border-top: 1px solid var(--border-dim);
+    border-bottom: 1px solid var(--border-dim);
+}
+
+.example-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--border-dim);
+}
+
+.example-tab {
+    padding: 12px 24px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+    letter-spacing: 0.3px;
+}
+
+.example-tab:hover { color: var(--text-secondary); }
+
+.example-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+
+.example-panel {
+    display: none;
+}
+
+.example-panel.active {
+    display: block;
+}
+
+.code-block {
+    background: var(--code-bg);
+    border: 1px solid var(--border-dim);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 18px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-dim);
+}
+
+.code-filename {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.code-lang {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    background: var(--bg-raised);
+    padding: 3px 10px;
+    border-radius: 4px;
+}
+
+.code-content {
+    padding: 1.5rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    line-height: 1.85;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+/* ═══════════════════════════════════════════ REPORT PREVIEW */
+.report-section {
+    overflow: hidden;
+}
+
+.report-mockup {
+    margin-top: 3rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.4);
+}
+
+.report-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 20px;
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border-dim);
+}
+
+.report-bar-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.report-bar-dot:nth-child(1) { background: #f85149; }
+.report-bar-dot:nth-child(2) { background: #f0b72f; }
+.report-bar-dot:nth-child(3) { background: #3fb950; }
+
+.report-bar-url {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-left: 12px;
+    background: var(--bg-surface);
+    padding: 4px 14px;
+    border-radius: 6px;
+    flex: 1;
+    max-width: 400px;
+}
+
+.report-body {
+    padding: 2rem;
+}
+
+.mock-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border-dim);
+}
+
+.mock-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #38bdf8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: var(--bg-void);
+    font-size: 1.1rem;
+}
+
+.mock-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-bright);
+}
+
+.mock-subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.mock-stats {
+    display: flex;
+    gap: 1.5rem;
+    margin-left: auto;
+    align-items: center;
+}
+
+.mock-stat-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.mock-stat-num.pass { color: #22c55e; }
+.mock-stat-num.fail { color: var(--rec-red); }
+.mock-stat-num.total { color: var(--accent); }
+
+.mock-stat-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.mock-feature {
+    background: var(--bg-raised);
+    border: 1px solid var(--border-dim);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.mock-feature-header {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-bright);
+}
+
+.mock-feature-header .chevron {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+}
+
+.mock-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-left: auto;
+}
+
+.mock-badge.pass { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+.mock-badge.fail { background: rgba(248, 81, 73, 0.1); color: var(--rec-red); }
+
+.mock-scenario {
+    margin: 0 12px 12px;
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-dim);
+    border-radius: 8px;
+}
+
+.mock-video {
+    flex: 1;
+    aspect-ratio: 16/9;
+    background: #0d1117;
+    border-radius: 6px;
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
+    position: relative;
+    overflow: hidden;
+}
+
+.mock-video::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.008) 3px, rgba(255,255,255,0.008) 4px);
+}
+
+/* Fake browser content inside video */
+.mock-browser {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.mock-browser-bar {
+    background: #161b22;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    border-bottom: 1px solid #21262d;
+}
+
+.mock-browser-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #30363d;
+}
+
+.mock-browser-url {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.5rem;
+    color: #484f58;
+    margin-left: 6px;
+    background: #0d1117;
+    padding: 2px 8px;
+    border-radius: 3px;
+}
+
+.mock-browser-content {
+    flex: 1;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mock-browser-content .mock-input {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.5rem;
+    color: #c9d1d9;
+}
+
+.mock-browser-content .mock-btn {
+    background: #238636;
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.5rem;
+    color: white;
+    text-align: center;
+    width: fit-content;
+}
+
+.mock-browser-content .mock-heading {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: #e6edf3;
+}
+
+.mock-browser-content .mock-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.45rem;
+    color: #484f58;
+    line-height: 1.6;
+}
+
+/* Panel overlay bar at bottom of video */
+.mock-panel-bar {
+    background: #0a0c10;
+    border-top: 1px solid #1a1e28;
+    padding: 4px 8px;
+    display: flex;
+    gap: 8px;
+}
+
+.mock-panel-col {
+    flex: 1;
+}
+
+.mock-panel-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.4rem;
+    font-weight: 700;
+    color: #00d4aa;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.mock-panel-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.4rem;
+    color: #6e7681;
+    line-height: 1.4;
+}
+
+.mock-panel-text .current {
+    color: #00d4aa;
+}
+
+/* Playing indicator */
+.mock-playing-indicator {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 2;
+}
+
+.mock-playing-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--rec-red);
+    animation: pulse-rec 1.5s ease-in-out infinite;
+}
+
+.mock-playing-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.4rem;
+    color: var(--rec-red);
+    letter-spacing: 0.5px;
+}
+
+/* Progress bar under video */
+.mock-progress {
+    height: 2px;
+    background: #21262d;
+    position: relative;
+}
+
+.mock-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 1px;
+}
+
+.mock-play {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.mock-play::after {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 16px solid white;
+    border-top: 10px solid transparent;
+    border-bottom: 10px solid transparent;
+    margin-left: 4px;
+}
+
+/* Typing animation for the "playing" video */
+@keyframes cursor-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+.mock-cursor {
+    display: inline-block;
+    width: 4px;
+    height: 8px;
+    background: #58a6ff;
+    animation: cursor-blink 1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 1px;
+}
+
+.mock-steps {
+    width: 200px;
+    flex-shrink: 0;
+}
+
+.mock-step {
+    padding: 6px 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.6rem;
+    border-left: 2px solid transparent;
+    border-radius: 4px;
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 2px;
+}
+
+.mock-step.passed { border-left-color: #22c55e; color: var(--text-secondary); }
+.mock-step.failed { border-left-color: var(--rec-red); color: var(--rec-red); background: rgba(248, 81, 73, 0.06); }
+.mock-step.active { background: var(--bg-elevated); border-left-color: var(--accent); color: var(--text-primary); }
+
+.mock-step .ts {
+    color: #38bdf8;
+    opacity: 0.6;
+    margin-right: 6px;
+}
+
+.mock-step .kw {
+    color: var(--keyword);
+}
+
+/* ═══════════════════════════════════════════ BEYOND */
+.beyond-section {
+    background: var(--bg-deep);
+    border-top: 1px solid var(--border-dim);
+}
+
+.beyond-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+}
+
+.beyond-card {
+    padding: 2rem 2.5rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-dim);
+    border-radius: 14px;
+}
+
+.beyond-card h4 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text-bright);
+    margin-bottom: 0.75rem;
+}
+
+.beyond-card p {
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    font-weight: 300;
+}
+
+/* ═══════════════════════════════════════════ FOOTER */
+footer {
+    padding: 4rem 2rem;
+    border-top: 1px solid var(--border-dim);
+    text-align: center;
+}
+
+.footer-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.footer-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 1rem;
+}
+
+.footer-brand .nav-rec { width: 8px; height: 8px; }
+
+.footer-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.footer-tagline {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+    font-weight: 300;
+}
+
+.footer-links {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+}
+
+.footer-links a {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer-links a:hover { color: var(--text-secondary); }
+
+.footer-copy {
+    margin-top: 2rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════ RESPONSIVE */
+@media (max-width: 1024px) {
+    .hero-inner { grid-template-columns: 1fr; gap: 3rem; }
+    .why-grid { grid-template-columns: 1fr; }
+    .features-grid { grid-template-columns: repeat(2, 1fr); }
+    .beyond-grid { grid-template-columns: 1fr; }
+    .mock-steps { display: none; }
+}
+
+@media (max-width: 640px) {
+    .features-grid { grid-template-columns: 1fr; }
+    .hero-actions { flex-direction: column; align-items: flex-start; }
+    .install-inner { flex-direction: column; text-align: center; }
+    .mock-stats { display: none; }
+    .nav-links { gap: 1rem; }
+    .nav-links li:not(:last-child) { display: none; }
+    section { padding: 4rem 1.25rem; }
+}
+
+/* ═══════════════════════════════════════════ ANIMATIONS */
+@media (prefers-reduced-motion: no-preference) {
+    .hero-text, .hero-terminal { animation: fade-up 0.8s ease-out both; }
+    .hero-terminal { animation-delay: 0.15s; }
+
+    @keyframes fade-up {
+        from { opacity: 0; transform: translateY(24px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ NAV ═══ -->
+<nav>
+    <a href="#" class="nav-brand">
+        <span class="nav-rec"></span>
+        <span class="nav-name">thea-recorder</span>
+    </a>
+    <ul class="nav-links">
+        <li><a href="#why">Why</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#sdks">SDKs</a></li>
+        <li><a href="#examples">Examples</a></li>
+        <li><a href="#report">Report</a></li>
+        <li><a href="docs/">Docs</a></li>
+        <li><a href="https://github.com/BarkingIguana/thea-recorder" class="nav-pip">pip install thea-recorder</a></li>
+    </ul>
+</nav>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+    <div class="hero-inner">
+        <div class="hero-text">
+            <div class="hero-badge">Recording</div>
+            <h1>Record your E2E&nbsp;tests.<br><em>Watch them back.</em></h1>
+            <p class="hero-sub">
+                Capture browser tests as MP4 video with live panel overlays.
+                Minimal dependencies, easy install. SDKs for Python, Ruby, Go, TypeScript, Node, and Java.
+                Generate interactive HTML reports where clicking a step seeks the video
+                to that exact moment.
+            </p>
+            <div class="hero-actions">
+                <a href="https://github.com/BarkingIguana/thea-recorder" class="btn-primary">
+                    View on GitHub
+                </a>
+                <a href="#examples" class="btn-ghost">See examples</a>
+            </div>
+        </div>
+        <div class="hero-terminal">
+            <div class="terminal">
+                <div class="terminal-bar">
+                    <span class="terminal-dot"></span>
+                    <span class="terminal-dot"></span>
+                    <span class="terminal-dot"></span>
+                    <div class="hero-lang-tabs">
+                        <button class="hero-lang-tab active" onclick="showHeroTab('python')">Python</button>
+                        <button class="hero-lang-tab" onclick="showHeroTab('ruby')">Ruby</button>
+                        <button class="hero-lang-tab" onclick="showHeroTab('go')">Go</button>
+                        <button class="hero-lang-tab" onclick="showHeroTab('ts')">TypeScript</button>
+                        <button class="hero-lang-tab" onclick="showHeroTab('node')">Node</button>
+                        <button class="hero-lang-tab" onclick="showHeroTab('bash')">Bash</button>
+                        <button class="hero-lang-tab" onclick="showHeroTab('curl')">Curl</button>
+                    </div>
+                </div>
+                <div class="hero-lang-panel active" id="hero-python"><div class="terminal-body"><span class="kw">from</span> <span class="fn">thea</span> <span class="kw">import</span> RecorderClient
+
+client <span class="op">=</span> RecorderClient(<span class="str">"http://localhost:9123"</span>)
+client.start_display()
+
+<span class="kw">with</span> client.recording(<span class="str">"login_test"</span>):
+    <span class="cm"># run your browser test</span>
+    <span class="kw">pass</span>
+
+client.download_recording(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div></div>
+                <div class="hero-lang-panel" id="hero-ruby"><div class="terminal-body">client <span class="op">=</span> Recorder::Client.<span class="fn">new</span>(<span class="str">"http://localhost:9123"</span>)
+client.start_display
+
+client.<span class="fn">recording</span>(<span class="str">"login_test"</span>) <span class="kw">do</span>
+  <span class="cm"># run your browser test</span>
+<span class="kw">end</span>
+
+client.download_recording(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div></div>
+                <div class="hero-lang-panel" id="hero-go"><div class="terminal-body">client <span class="op">:=</span> recorder.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
+client.<span class="fn">StartDisplay</span>(ctx)
+
+stop, _ <span class="op">:=</span> client.<span class="fn">Recording</span>(ctx, <span class="str">"login_test"</span>)
+<span class="kw">defer</span> <span class="fn">stop</span>()
+<span class="cm">// run your browser test</span>
+
+client.<span class="fn">DownloadRecordingToFile</span>(ctx, <span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div></div>
+                <div class="hero-lang-panel" id="hero-ts"><div class="terminal-body"><span class="kw">import</span> { RecorderClient } <span class="kw">from</span> <span class="str">"thea-recorder"</span>;
+
+<span class="kw">const</span> client<span class="op">:</span> RecorderClient <span class="op">=</span> <span class="kw">new</span> <span class="fn">RecorderClient</span>({
+  url: <span class="str">"http://localhost:9123"</span>,
+});
+<span class="kw">await</span> client.<span class="fn">startDisplay</span>();
+
+<span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () <span class="op">=></span> {
+  <span class="cm">// run your Playwright test</span>
+});
+
+<span class="kw">await</span> client.<span class="fn">downloadRecordingToFile</span>(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>);</div></div>
+                <div class="hero-lang-panel" id="hero-node"><div class="terminal-body"><span class="kw">const</span> { RecorderClient } <span class="op">=</span> <span class="fn">require</span>(<span class="str">"thea-recorder"</span>);
+
+<span class="kw">const</span> client <span class="op">=</span> <span class="kw">new</span> <span class="fn">RecorderClient</span>({ url: <span class="str">"http://localhost:9123"</span> });
+<span class="kw">await</span> client.<span class="fn">startDisplay</span>();
+
+<span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () <span class="op">=></span> {
+  <span class="cm">// run your browser test</span>
+});
+
+<span class="kw">await</span> client.<span class="fn">downloadRecordingToFile</span>(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>);</div></div>
+                <div class="hero-lang-panel" id="hero-bash"><div class="terminal-body"><span class="cm"># start display and record</span>
+recorder start-display
+recorder start-recording <span class="op">--name</span> login_test
+
+<span class="cm"># run your test, then stop and download</span>
+recorder stop-recording
+recorder download <span class="op">--name</span> login_test <span class="op">-o</span> login_test.mp4</div></div>
+                <div class="hero-lang-panel" id="hero-curl"><div class="terminal-body"><span class="cm"># start display and record</span>
+curl <span class="op">-X</span> POST localhost:9123/display/start
+curl <span class="op">-X</span> POST localhost:9123/recording/start \
+  <span class="op">-H</span> <span class="str">"Content-Type: application/json"</span> \
+  <span class="op">-d</span> <span class="str">'{"name": "login_test"}'</span>
+
+<span class="cm"># run your test, then stop and download</span>
+curl <span class="op">-X</span> POST localhost:9123/recording/stop
+curl <span class="op">-o</span> login_test.mp4 localhost:9123/recordings/login_test</div></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ INSTALL ═══ -->
+<div class="install-bar">
+    <div class="install-inner">
+        <div class="install-cmd">pip install thea-recorder</div>
+        <div class="install-deps">
+            System deps: <code>xvfb ffmpeg x11-xserver-utils fonts-dejavu-core</code>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ WHY ═══ -->
+<section class="why-section" id="why">
+    <div class="section-inner">
+        <div class="section-label">The Problem</div>
+        <h2>E2E failures are a black box</h2>
+        <p class="section-sub">
+            Your browser was right there doing the thing. You just weren't watching.
+        </p>
+
+        <div class="why-grid">
+            <div class="why-problem">
+                <div class="why-icon">
+                    <span class="why-icon-label" style="color: var(--rec-red);">Without recorder</span>
+                </div>
+                <h3>The debugging loop from hell</h3>
+                <p>
+                    A test fails in CI. You read the stack trace. You try to reproduce locally.
+                    You can't. You add more logging, push, wait 20 minutes for CI, read logs again.
+                    You do this three more times before you find the actual problem: a modal
+                    was covering the button.
+                </p>
+                <div class="why-loop">
+                    <div>1. Read the failure log</div>
+                    <div>2. Try to reproduce locally</div>
+                    <div>3. Add more logging</div>
+                    <div class="active-line">4. Push, wait for CI, read logs again</div>
+                    <div class="active-line">5. goto 3</div>
+                </div>
+            </div>
+
+            <div class="why-solution">
+                <div class="why-icon">
+                    <span class="why-icon-label" style="color: var(--accent);">With recorder</span>
+                </div>
+                <h3>You stop guessing. You start watching.</h3>
+                <p>
+                    Every scenario is recorded as MP4 video with a live panel overlay showing
+                    test status, current step, and any context you want. The HTML report lets
+                    you click a step and the video seeks to that exact moment. You see the modal
+                    covering the button in five seconds.
+                </p>
+                <div class="why-instead">
+                    <div>1. Open report.html</div>
+                    <div>2. Click the failed step</div>
+                    <div>3. Watch what happened</div>
+                    <div>4. Fix it</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ FEATURES ═══ -->
+<section id="features">
+    <div class="section-inner">
+        <div class="section-label">Capabilities</div>
+        <h2>Everything you need.<br>Nothing you don't.</h2>
+        <p class="section-sub">
+            Minimal dependencies, easy install. Xvfb and ffmpeg only needed on the server.
+        </p>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">&#9654;</div>
+                <h4>MP4 video capture</h4>
+                <p>
+                    Records the Xvfb virtual display via ffmpeg with H.264 encoding.
+                    One video per scenario. Mobile-compatible MP4 output.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9638;</div>
+                <h4>Panel overlay system</h4>
+                <p>
+                    Named columns below the browser viewport with live-updating text.
+                    Fixed or auto-width layout. Smart scrolling keeps the active line visible.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128214;</div>
+                <h4>Interactive reports</h4>
+                <p>
+                    Single-page HTML with embedded video players. Click any step to seek
+                    the video. Playback highlights the current step automatically.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128268;</div>
+                <h4>Framework agnostic</h4>
+                <p>
+                    Works with Behave, pytest-bdd, Cucumber, or any runner. The report
+                    takes a simple list of dicts &mdash; no framework coupling.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128230;</div>
+                <h4>Zero dependencies</h4>
+                <p>
+                    Pure Python stdlib. No pip install chain. No version conflicts.
+                    Just add it to your Docker image and go.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128296;</div>
+                <h4>Docker ready</h4>
+                <p>
+                    Example Dockerfile included. Works with any CI system that supports
+                    Docker. Just mount a volume for the recordings.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ ARCHITECTURE ═══ -->
+<section class="beyond-section">
+    <div class="section-inner">
+        <div class="section-label">Architecture</div>
+        <h2>HTTP server + native SDKs</h2>
+        <p class="section-sub">
+            One server process. Any language. The recorder runs as a service that your test suite talks to via HTTP.
+        </p>
+        <div style="max-width:620px;margin:3rem auto 0;">
+            <svg viewBox="0 0 620 400" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+                <style>
+                    .sk-box { stroke: #4a5568; stroke-width: 1.5; fill: none; }
+                    .sk-arrow { stroke: #00d4aa; stroke-width: 1.8; fill: none; marker-end: url(#ah); }
+                    .sk-label { font-family: 'Space Mono', monospace; font-size: 13px; fill: #c0c8d8; }
+                    .sk-sub { font-family: 'Space Mono', monospace; font-size: 10px; fill: #4a5568; }
+                    .sk-accent { font-family: 'Space Mono', monospace; font-size: 11px; fill: #00d4aa; }
+                    .sk-zone-label { font-family: 'Outfit', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; }
+                </style>
+                <defs>
+                    <marker id="ah" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                        <path d="M0,0 L8,3 L0,6" fill="none" stroke="#00d4aa" stroke-width="1.2"/>
+                    </marker>
+                    <filter id="pencil">
+                        <feTurbulence type="turbulence" baseFrequency="0.03" numOctaves="4" result="noise"/>
+                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="1.2" xChannelSelector="R" yChannelSelector="G"/>
+                    </filter>
+                </defs>
+                <g filter="url(#pencil)">
+
+                    <!-- ── YOUR CODE zone (left) ── -->
+                    <rect x="12" y="12" width="220" height="375" rx="10" fill="rgba(255,255,255,0.015)" stroke="#222d45" stroke-width="1" stroke-dasharray="4 3"/>
+                    <text class="sk-zone-label" x="72" y="34" fill="#4a5568">Your code</text>
+
+                    <!-- Test Suite box -->
+                    <rect class="sk-box" x="30" y="55" width="185" height="58" rx="5"/>
+                    <text class="sk-sub" x="52" y="76">Go · Py · Ruby · TS · Node</text>
+                    <text class="sk-label" x="78" y="98">Test Suite</text>
+
+                    <!-- Your App / Browser box -->
+                    <rect class="sk-box" x="30" y="155" width="185" height="58" rx="5"/>
+                    <text class="sk-label" x="62" y="180">Your App</text>
+                    <text class="sk-sub" x="62" y="198">browser on :99</text>
+
+                    <!-- Arrow: Test Suite → App -->
+                    <path class="sk-arrow" d="M122,113 L122,155"/>
+                    <text class="sk-sub" x="130" y="140" fill="#7a879e">drives</text>
+
+                    <!-- ── RECORDER MANAGES zone (right) ── -->
+                    <rect x="310" y="12" width="296" height="375" rx="10" fill="rgba(0,212,170,0.025)" stroke="#00d4aa" stroke-width="1" stroke-opacity="0.2" stroke-dasharray="4 3"/>
+                    <text class="sk-zone-label" x="370" y="34" fill="#00d4aa" fill-opacity="0.5">Recorder manages</text>
+
+                    <!-- Recorder Server box -->
+                    <rect class="sk-box" x="330" y="55" width="195" height="58" rx="5" stroke="#00d4aa" stroke-opacity="0.35"/>
+                    <text class="sk-label" x="358" y="80">Recorder Server</text>
+                    <text class="sk-sub" x="365" y="98">thea serve :9123</text>
+
+                    <!-- Arrow: Test Suite → Recorder Server -->
+                    <path class="sk-arrow" d="M215,84 L330,84"/>
+                    <text class="sk-accent" x="246" y="76">HTTP</text>
+
+                    <!-- Virtual Display box -->
+                    <rect class="sk-box" x="330" y="155" width="195" height="58" rx="5"/>
+                    <text class="sk-label" x="363" y="180">Xvfb + ffmpeg</text>
+                    <text class="sk-sub" x="363" y="198">virtual display :99</text>
+
+                    <!-- Arrow: Server → Display -->
+                    <path class="sk-arrow" d="M428,113 L428,155"/>
+
+                    <!-- Dashed line: App runs on virtual display -->
+                    <path d="M215,184 L330,184" stroke="#7a879e" stroke-width="1" stroke-dasharray="4 3"/>
+                    <text class="sk-sub" x="234" y="177" fill="#7a879e">renders on</text>
+
+                    <!-- Output box -->
+                    <rect class="sk-box" x="330" y="265" width="195" height="58" rx="5"/>
+                    <text style="font-family:'Space Mono',monospace;font-size:14px;fill:#00d4aa;" x="374" y="292">MP4</text>
+                    <text class="sk-sub" x="403" y="292"> + </text>
+                    <text style="font-family:'Space Mono',monospace;font-size:14px;fill:#00d4aa;" x="420" y="292">HTML</text>
+                    <text class="sk-sub" x="378" y="310">report.html</text>
+
+                    <!-- Arrow: Display → Output -->
+                    <path class="sk-arrow" d="M428,213 L428,265"/>
+                    <text class="sk-sub" x="436" y="244" fill="#7a879e">produces</text>
+
+                    <!-- Download arrow: Output → back to you -->
+                    <path d="M330,305 L122,305 L122,223" stroke="#00d4aa" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#ah)" opacity="0.5"/>
+                    <text class="sk-sub" x="158" y="320" fill="#7a879e">download via HTTP API</text>
+
+                </g>
+            </svg>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ SDK SHOWCASE ═══ -->
+<section id="sdks">
+    <div class="section-inner">
+        <div class="section-label">SDKs</div>
+        <h2>Record tests in any language.<br>Under 10 lines of code.</h2>
+        <p class="section-sub">
+            SDKs for Python, Ruby, Go, TypeScript, Node, and Java. Minimal dependencies, easy install. Same API everywhere.
+        </p>
+
+        <div class="code-block">
+            <div class="example-tabs">
+                <button class="example-tab active" onclick="showSdkTab('py')">Python</button>
+                <button class="example-tab" onclick="showSdkTab('rb')">Ruby</button>
+                <button class="example-tab" onclick="showSdkTab('go')">Go</button>
+                <button class="example-tab" onclick="showSdkTab('ts')">TypeScript</button>
+                <button class="example-tab" onclick="showSdkTab('node')">Node</button>
+                <button class="example-tab" onclick="showSdkTab('bash')">Bash</button>
+                <button class="example-tab" onclick="showSdkTab('curl')">Curl</button>
+            </div>
+
+            <div class="example-panel active" id="sdk-py">
+                <div class="code-content"><span class="kw">from</span> <span class="fn">thea</span> <span class="kw">import</span> RecorderClient
+
+client <span class="op">=</span> RecorderClient(<span class="str">"http://localhost:9123"</span>)
+client.wait_until_ready()
+client.start_display()
+
+<span class="kw">with</span> client.recording(<span class="str">"login_test"</span>):
+    <span class="cm"># run your browser test</span>
+    <span class="kw">pass</span>
+
+client.download_recording(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div>
+            </div>
+
+            <div class="example-panel" id="sdk-rb">
+                <div class="code-content"><span class="kw">require</span> <span class="str">"recorder"</span>
+
+client <span class="op">=</span> Recorder::Client.new(<span class="str">"http://localhost:9123"</span>)
+client.wait_until_ready
+client.start_display
+
+client.recording(<span class="str">"login_test"</span>) <span class="kw">do</span>
+  <span class="cm"># run your browser test</span>
+<span class="kw">end</span>
+
+client.download_recording(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div>
+            </div>
+
+            <div class="example-panel" id="sdk-go">
+                <div class="code-content">client <span class="op">:=</span> recorder.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
+client.<span class="fn">WaitUntilReady</span>(ctx, <span class="fn">30</span><span class="op">*</span>time.Second)
+client.<span class="fn">StartDisplay</span>(ctx)
+
+stop, _ <span class="op">:=</span> client.<span class="fn">Recording</span>(ctx, <span class="str">"login_test"</span>)
+<span class="kw">defer</span> <span class="fn">stop</span>()
+<span class="cm">// run your browser test</span>
+
+client.<span class="fn">DownloadRecordingToFile</span>(ctx, <span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>)</div>
+            </div>
+
+            <div class="example-panel" id="sdk-ts">
+                <div class="code-content"><span class="kw">import</span> { RecorderClient } <span class="kw">from</span> <span class="str">"thea-recorder"</span>;
+
+<span class="kw">const</span> client<span class="op">:</span> RecorderClient <span class="op">=</span> <span class="kw">new</span> <span class="fn">RecorderClient</span>({
+  url: <span class="str">"http://localhost:9123"</span>,
+});
+<span class="kw">await</span> client.<span class="fn">waitUntilReady</span>();
+<span class="kw">await</span> client.<span class="fn">startDisplay</span>();
+
+<span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () <span class="op">=></span> {
+  <span class="cm">// run your Playwright test</span>
+});
+
+<span class="kw">await</span> client.<span class="fn">downloadRecordingToFile</span>(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>);</div>
+            </div>
+
+            <div class="example-panel" id="sdk-node">
+                <div class="code-content"><span class="kw">const</span> { RecorderClient } <span class="op">=</span> <span class="fn">require</span>(<span class="str">"thea-recorder"</span>);
+
+<span class="kw">const</span> client <span class="op">=</span> <span class="kw">new</span> <span class="fn">RecorderClient</span>({ url: <span class="str">"http://localhost:9123"</span> });
+<span class="kw">await</span> client.<span class="fn">waitUntilReady</span>();
+<span class="kw">await</span> client.<span class="fn">startDisplay</span>();
+
+<span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () <span class="op">=></span> {
+  <span class="cm">// run your browser test</span>
+});
+
+<span class="kw">await</span> client.<span class="fn">downloadRecordingToFile</span>(<span class="str">"login_test"</span>, <span class="str">"login_test.mp4"</span>);</div>
+            </div>
+
+            <div class="example-panel" id="sdk-bash">
+                <div class="code-content"><span class="cm"># start display and record</span>
+recorder start-display
+recorder start-recording <span class="op">--name</span> login_test
+
+<span class="cm"># run your test, then stop and download</span>
+recorder stop-recording
+recorder download <span class="op">--name</span> login_test <span class="op">-o</span> login_test.mp4</div>
+            </div>
+
+            <div class="example-panel" id="sdk-curl">
+                <div class="code-content"><span class="cm"># start display and record</span>
+curl <span class="op">-X</span> POST localhost:9123/display/start
+curl <span class="op">-X</span> POST localhost:9123/recording/start \
+  <span class="op">-H</span> <span class="str">"Content-Type: application/json"</span> \
+  <span class="op">-d</span> <span class="str">'{"name": "login_test"}'</span>
+
+<span class="cm"># run your test, then stop and download</span>
+curl <span class="op">-X</span> POST localhost:9123/recording/stop
+curl <span class="op">-o</span> login_test.mp4 localhost:9123/recordings/login_test</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ EXAMPLES ═══ -->
+<section class="examples-section" id="examples">
+    <div class="section-inner">
+        <div class="section-label">Server &amp; CLI</div>
+        <h2>Drop-in. Five minutes.</h2>
+        <p class="section-sub">
+            Start the server, connect from any language, or use the CLI directly from bash.
+        </p>
+
+        <div class="code-block">
+            <div class="example-tabs">
+                <button class="example-tab active" onclick="showTab('behave')">environment.py</button>
+                <button class="example-tab" onclick="showTab('docker')">Dockerfile</button>
+                <button class="example-tab" onclick="showTab('run')">Run</button>
+            </div>
+
+            <div class="example-panel active" id="tab-behave">
+                <div class="code-content"><span class="cm"># features/environment.py — drop-in Behave integration</span>
+
+<span class="kw">from</span> <span class="fn">recorder</span> <span class="kw">import</span> Recorder, generate_report
+
+<span class="kw">def</span> <span class="fn">before_all</span>(context):
+    recorder <span class="op">=</span> Recorder(output_dir<span class="op">=</span><span class="str">"/app/recordings"</span>, display<span class="op">=</span><span class="fn">99</span>)
+    recorder.add_panel(<span class="str">"status"</span>, title<span class="op">=</span><span class="str">"Status"</span>, width<span class="op">=</span><span class="fn">120</span>)
+    recorder.add_panel(<span class="str">"scenario"</span>, title<span class="op">=</span><span class="str">"Scenario"</span>)
+    recorder.start_display()
+    context.recorder <span class="op">=</span> recorder
+    context.recorded_videos <span class="op">=</span> []
+
+<span class="kw">def</span> <span class="fn">before_scenario</span>(context, scenario):
+    context.recorder.start_recording(scenario.name)
+    context.recorder.update_panel(<span class="str">"status"</span>, <span class="str">"Running"</span>)
+
+<span class="kw">def</span> <span class="fn">after_scenario</span>(context, scenario):
+    video <span class="op">=</span> context.recorder.stop_recording()
+    context.recorded_videos.append({
+        <span class="str">"feature"</span>: scenario.feature.name,
+        <span class="str">"scenario"</span>: scenario.name,
+        <span class="str">"status"</span>: scenario.status.name,
+        <span class="str">"video"</span>: video,
+    })
+
+<span class="kw">def</span> <span class="fn">after_all</span>(context):
+    context.recorder.cleanup()
+    generate_report(context.recorded_videos, title<span class="op">=</span><span class="str">"E2E Test Report"</span>)</div>
+            </div>
+
+            <div class="example-panel" id="tab-docker">
+                <div class="code-content"><span class="cm"># Dockerfile</span>
+<span class="kw">FROM</span> python:3.12-slim
+
+<span class="kw">RUN</span> apt-get update <span class="op">&&</span> apt-get install -qyy --no-install-recommends \
+    chromium-driver xvfb ffmpeg x11-xserver-utils \
+    fonts-dejavu-core \
+    <span class="op">&&</span> rm -rf /var/lib/apt/lists/*
+
+<span class="kw">RUN</span> pip install thea-recorder behave selenium
+
+<span class="kw">COPY</span> features/ /app/features/
+<span class="kw">WORKDIR</span> /app
+
+<span class="kw">ENTRYPOINT</span> [<span class="str">"behave"</span>, <span class="str">"--no-capture"</span>]</div>
+            </div>
+
+            <div class="example-panel" id="tab-run">
+                <div class="code-content"><span class="cm"># Build and run</span>
+<span class="acc">$</span> docker build -t my-e2e-tests .
+<span class="acc">$</span> docker run --shm-size=2g \
+    -v $(pwd)/recordings:/app/recordings \
+    my-e2e-tests
+
+<span class="cm"># Open the report</span>
+<span class="acc">$</span> open recordings/report.html
+
+<span class="cm"># That's it. Every scenario is an MP4.</span>
+<span class="cm"># The report has clickable step timelines.</span>
+<span class="cm"># You never stare at a stack trace again.</span></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ REPORT PREVIEW ═══ -->
+<section class="report-section" id="report">
+    <div class="section-inner">
+        <div class="section-label">Output</div>
+        <h2>Reports that tell the whole story</h2>
+        <p class="section-sub">
+            Click a step. Watch what happened. Dark-themed, responsive, single-file HTML.
+        </p>
+
+        <div class="report-mockup">
+            <div class="report-bar">
+                <span class="report-bar-dot"></span>
+                <span class="report-bar-dot"></span>
+                <span class="report-bar-dot"></span>
+                <span class="report-bar-url">recordings/report.html</span>
+            </div>
+            <div class="report-body">
+                <div class="mock-header">
+                    <div class="mock-logo">R</div>
+                    <div>
+                        <div class="mock-title">E2E Test Report</div>
+                        <div class="mock-subtitle">Automated test recordings</div>
+                    </div>
+                    <div class="mock-stats">
+                        <div style="text-align:center"><div class="mock-stat-num total">8</div><div class="mock-stat-label">Scenarios</div></div>
+                        <div style="text-align:center"><div class="mock-stat-num pass">7</div><div class="mock-stat-label">Passed</div></div>
+                        <div style="text-align:center"><div class="mock-stat-num fail">1</div><div class="mock-stat-label">Failed</div></div>
+                    </div>
+                </div>
+
+                <div class="mock-feature">
+                    <div class="mock-feature-header">
+                        <span class="chevron">&#9654;</span>
+                        Invoice Management
+                        <span class="mock-badge pass">PASS</span>
+                    </div>
+                    <div class="mock-scenario">
+                        <div class="mock-video">
+                            <div class="mock-playing-indicator">
+                                <span class="mock-playing-dot"></span>
+                                <span class="mock-playing-label">REC</span>
+                            </div>
+                            <div class="mock-browser">
+                                <div class="mock-browser-bar">
+                                    <span class="mock-browser-dot"></span>
+                                    <span class="mock-browser-dot"></span>
+                                    <span class="mock-browser-dot"></span>
+                                    <span class="mock-browser-url">app.ledgerco.dev/invoices</span>
+                                </div>
+                                <div class="mock-browser-content">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                                        <div class="mock-heading">Invoices</div>
+                                        <div class="mock-btn">+ New Invoice</div>
+                                    </div>
+                                    <!-- Invoice table -->
+                                    <div style="margin-top:4px;">
+                                        <div style="display:flex;gap:6px;padding:3px 0;border-bottom:1px solid #21262d;font-family:'Space Mono',monospace;font-size:0.4rem;color:#484f58;">
+                                            <span style="width:60px;">INV #</span><span style="flex:1;">Client</span><span style="width:55px;text-align:right;">Amount</span><span style="width:45px;text-align:center;">Status</span>
+                                        </div>
+                                        <div style="display:flex;gap:6px;padding:4px 0;border-bottom:1px solid #161b22;font-family:'Space Mono',monospace;font-size:0.4rem;color:#c9d1d9;">
+                                            <span style="width:60px;color:#58a6ff;">INV-041</span><span style="flex:1;">Acme Corp</span><span style="width:55px;text-align:right;color:#3fb950;">$12,400</span><span style="width:45px;text-align:center;color:#3fb950;font-size:0.35rem;">PAID</span>
+                                        </div>
+                                        <div style="display:flex;gap:6px;padding:4px 0;border-bottom:1px solid #161b22;font-family:'Space Mono',monospace;font-size:0.4rem;color:#c9d1d9;background:rgba(88,166,255,0.05);">
+                                            <span style="width:60px;color:#58a6ff;">INV-042</span><span style="flex:1;">Globex Inc</span><span style="width:55px;text-align:right;color:#fbbf24;">$8,750</span><span style="width:45px;text-align:center;color:#fbbf24;font-size:0.35rem;">DUE</span>
+                                        </div>
+                                        <div style="display:flex;gap:6px;padding:4px 0;font-family:'Space Mono',monospace;font-size:0.4rem;color:#c9d1d9;">
+                                            <span style="width:60px;color:#58a6ff;">INV-043</span><span style="flex:1;">Initech</span><span style="width:55px;text-align:right;color:#3fb950;">$3,200</span><span style="width:45px;text-align:center;color:#3fb950;font-size:0.35rem;">PAID</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mock-panel-bar">
+                                    <div class="mock-panel-col">
+                                        <div class="mock-panel-title">Status</div>
+                                        <div class="mock-panel-text"><span class="current">Running</span></div>
+                                    </div>
+                                    <div class="mock-panel-col" style="flex:2;">
+                                        <div class="mock-panel-title">Steps</div>
+                                        <div class="mock-panel-text">
+                                            &nbsp; Given 3 invoices exist<br>
+                                            &nbsp; When I open the invoice list<br>
+                                            <span class="current">* Then I see all invoices</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mock-progress"><div class="mock-progress-fill" style="width:62%;"></div></div>
+                        </div>
+                        <div class="mock-steps">
+                            <div class="mock-step passed"><span class="ts">0:00</span> <span class="kw">Given</span> 3 invoices exist</div>
+                            <div class="mock-step passed"><span class="ts">0:02</span> <span class="kw">When</span> I open the invoice list</div>
+                            <div class="mock-step passed active"><span class="ts">0:04</span> <span class="kw">Then</span> I see all invoices</div>
+                            <div class="mock-step passed"><span class="ts">0:06</span> <span class="kw">And</span> totals are correct</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mock-feature">
+                    <div class="mock-feature-header">
+                        <span class="chevron">&#9654;</span>
+                        Tax Submission
+                        <span class="mock-badge fail">FAIL</span>
+                    </div>
+                    <div class="mock-scenario">
+                        <div class="mock-video">
+                            <div class="mock-browser">
+                                <div class="mock-browser-bar">
+                                    <span class="mock-browser-dot"></span>
+                                    <span class="mock-browser-dot"></span>
+                                    <span class="mock-browser-dot"></span>
+                                    <span class="mock-browser-url">app.ledgerco.dev/tax/submit</span>
+                                </div>
+                                <div class="mock-browser-content">
+                                    <div class="mock-heading">Submit BAS Return</div>
+                                    <div style="display:flex;gap:6px;margin-top:3px;">
+                                        <div style="flex:1;">
+                                            <div style="font-family:'Space Mono',monospace;font-size:0.38rem;color:#484f58;margin-bottom:2px;">Period</div>
+                                            <div class="mock-input">Q4 2025</div>
+                                        </div>
+                                        <div style="flex:1;">
+                                            <div style="font-family:'Space Mono',monospace;font-size:0.38rem;color:#484f58;margin-bottom:2px;">GST collected</div>
+                                            <div class="mock-input">$14,280.00</div>
+                                        </div>
+                                    </div>
+                                    <div style="display:flex;gap:6px;margin-top:3px;align-items:flex-end;">
+                                        <div style="flex:1;">
+                                            <div style="font-family:'Space Mono',monospace;font-size:0.38rem;color:#484f58;margin-bottom:2px;">GST credits</div>
+                                            <div class="mock-input">$6,140.00</div>
+                                        </div>
+                                        <div class="mock-btn" style="background:#dc2626;">Submit to ATO</div>
+                                    </div>
+                                    <div style="margin-top:4px;padding:3px 6px;background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.2);border-radius:3px;font-family:'Space Mono',monospace;font-size:0.4rem;color:#f85149;">
+                                        Error: ABN validation failed — gateway timeout
+                                    </div>
+                                </div>
+                                <div class="mock-panel-bar">
+                                    <div class="mock-panel-col">
+                                        <div class="mock-panel-title">Status</div>
+                                        <div class="mock-panel-text" style="color:#f85149;">FAILED</div>
+                                    </div>
+                                    <div class="mock-panel-col" style="flex:2;">
+                                        <div class="mock-panel-title">Steps</div>
+                                        <div class="mock-panel-text">
+                                            &nbsp; Given Q4 tax data<br>
+                                            &nbsp; When I submit the return<br>
+                                            <span style="color:#f85149;">* Then I see a receipt</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mock-progress"><div class="mock-progress-fill" style="width:100%;background:var(--rec-red);"></div></div>
+                        </div>
+                        <div class="mock-steps">
+                            <div class="mock-step passed"><span class="ts">0:00</span> <span class="kw">Given</span> Q4 tax data</div>
+                            <div class="mock-step passed"><span class="ts">0:04</span> <span class="kw">When</span> I submit the return</div>
+                            <div class="mock-step failed"><span class="ts">0:09</span> <span class="kw">Then</span> I see a receipt</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ BEYOND DEBUGGING ═══ -->
+<section class="beyond-section">
+    <div class="section-inner">
+        <div class="section-label">Beyond debugging</div>
+        <h2>Passing tests are documentation too</h2>
+        <p class="section-sub">
+            Recordings of green tests are living proof that your features actually work,
+            updated every time your suite runs.
+        </p>
+
+        <div class="beyond-grid">
+            <div class="beyond-card">
+                <h4>Share with QA</h4>
+                <p>
+                    QA can communicate issues effectively by sharing documented video evidence
+                    of both successes and failures. No need to reproduce bugs or explain what happened
+                    — the recording shows exactly what the browser did.
+                </p>
+            </div>
+            <div class="beyond-card">
+                <h4>Onboard new developers</h4>
+                <p>
+                    New team members can watch the test suite to understand what the app
+                    does. It's a demo reel that's always current, generated automatically
+                    from the test run.
+                </p>
+            </div>
+            <div class="beyond-card">
+                <h4>Prove it to stakeholders</h4>
+                <p>
+                    Product managers want to see features working, not test output.
+                    Recordings are proof that the sprint deliverables actually function
+                    in a real browser.
+                </p>
+            </div>
+            <div class="beyond-card">
+                <h4>Audit and compliance</h4>
+                <p>
+                    Some industries require evidence that testing was performed. Video
+                    recordings with timestamped steps are a far stronger artefact than
+                    a JUnit XML report.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer>
+    <div class="footer-inner">
+        <div class="footer-brand">
+            <span class="nav-rec"></span>
+            <span class="footer-name">thea-recorder</span>
+        </div>
+        <p class="footer-tagline">Record your E2E tests. Watch them back.</p>
+        <div class="footer-links">
+            <a href="https://github.com/BarkingIguana/thea-recorder">GitHub</a>
+            <a href="https://github.com/BarkingIguana/thea-recorder#install">Install</a>
+            <a href="https://github.com/BarkingIguana/thea-recorder#api">API Docs</a>
+            <a href="https://github.com/BarkingIguana/thea-recorder/blob/main/LICENSE">MIT License</a>
+        </div>
+        <p class="footer-copy">Built by Mechanical Rock. Open source under the MIT License.</p>
+    </div>
+</footer>
+
+<script>
+function showTab(name) {
+    const block = document.getElementById('tab-' + name).closest('.code-block');
+    block.querySelectorAll('.example-tab').forEach(t => t.classList.remove('active'));
+    block.querySelectorAll('.example-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+
+function showSdkTab(name) {
+    const block = document.getElementById('sdk-' + name).closest('.code-block');
+    block.querySelectorAll('.example-tab').forEach(t => t.classList.remove('active'));
+    block.querySelectorAll('.example-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('sdk-' + name).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+
+function showHeroTab(name) {
+    document.querySelectorAll('.hero-lang-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.hero-lang-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('hero-' + name).classList.add('active');
+    event.currentTarget.classList.add('active');
+}
+</script>
+</body>
+</html>

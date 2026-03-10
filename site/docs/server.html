@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Server &amp; API Reference — thea-recorder docs</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topnav">
+    <a href="../index.html" class="topnav-brand">
+        <span class="topnav-rec"></span>
+        <span>thea-recorder</span>
+    </a>
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+    </button>
+    <ul class="topnav-links">
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="https://github.com/BarkingIguana/thea-recorder">GitHub</a></li>
+    </ul>
+</header>
+
+<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+<aside class="sidebar">
+    <div class="sidebar-section">
+        <h3>Getting Started</h3>
+        <ul>
+            <li><a href="index.html">Quick Start</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>Reference</h3>
+        <ul>
+            <li><a href="server.html" class="active">Server &amp; API</a></li>
+            <li><a href="sdks.html">SDKs</a></li>
+            <li><a href="cli.html">CLI</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>Deployment</h3>
+        <ul>
+            <li><a href="docker.html">Docker &amp; CI</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>On this page</h3>
+        <ul>
+            <li><a href="#starting">Starting the server</a></li>
+            <li><a href="#api-reference">API Reference</a></li>
+            <li><a href="#display">Display</a></li>
+            <li><a href="#panels">Panels</a></li>
+            <li><a href="#recording">Recording</a></li>
+            <li><a href="#recordings">Recordings (files)</a></li>
+            <li><a href="#health">Health &amp; Utility</a></li>
+            <li><a href="#errors">Error Responses</a></li>
+            <li><a href="#cors">CORS</a></li>
+            <li><a href="#shutdown">Graceful Shutdown</a></li>
+        </ul>
+    </div>
+</aside>
+
+<main class="content">
+    <h1>Server &amp; API Reference
+        <span class="subtitle">REST API for display, panels, and recording control</span>
+    </h1>
+
+    <p class="lead">
+        The thea-recorder server is a long-running process that wraps a single recorder instance and exposes it via a REST API.
+        SDKs and the CLI both talk to this server.
+    </p>
+
+    <!-- ─── STARTING ─── -->
+    <h2 id="starting">Starting the server</h2>
+
+<pre><code><span class="cmd">thea</span> serve <span class="flag">--port</span> <span class="val">9123</span> <span class="flag">--output-dir</span> <span class="val">./recordings</span> <span class="flag">--display</span> <span class="val">99</span></code><span class="lang-label">bash</span></pre>
+
+    <h3>Server options</h3>
+    <table>
+        <thead>
+            <tr><th>Flag</th><th>Default</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><code>--port</code></td><td><code>9123</code></td><td>Port to listen on</td></tr>
+            <tr><td><code>--display</code></td><td><code>99</code></td><td>X11 display number for Xvfb</td></tr>
+            <tr><td><code>--output-dir</code></td><td><code>/tmp/recordings</code></td><td>Where MP4 files are saved</td></tr>
+            <tr><td><code>--browser-size</code></td><td><code>1920x1080</code></td><td>Virtual display resolution</td></tr>
+            <tr><td><code>--framerate</code></td><td><code>15</code></td><td>Recording FPS</td></tr>
+            <tr><td><code>--cors</code></td><td>off</td><td>Enable CORS headers for browser access</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ─── API ─── -->
+    <h2 id="api-reference">API Reference</h2>
+
+    <p>All endpoints return JSON. Error responses use <code>{"error": "message"}</code>.</p>
+
+    <!-- ─── DISPLAY ─── -->
+    <h3 id="display">Display</h3>
+
+    <div class="endpoint">
+        <span class="endpoint-method post">POST</span>
+        <span class="endpoint-path">/display/start</span>
+        <p>Start the virtual display (Xvfb).</p>
+<pre><code><span class="cmd">curl</span> -X POST http://localhost:9123/display/start</code></pre>
+        <div class="response-label">Response 201</div>
+<pre><code>{<span class="str">"status"</span>: <span class="str">"started"</span>, <span class="str">"display"</span>: <span class="str">":99"</span>}</code></pre>
+        <p>Returns <strong>409</strong> if display is already started.</p>
+    </div>
+
+    <div class="endpoint">
+        <span class="endpoint-method post">POST</span>
+        <span class="endpoint-path">/display/stop</span>
+        <p>Stop the virtual display.</p>
+<pre><code><span class="cmd">curl</span> -X POST http://localhost:9123/display/stop</code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>{<span class="str">"status"</span>: <span class="str">"stopped"</span>}</code></pre>
+    </div>
+
+    <!-- ─── PANELS ─── -->
+    <h3 id="panels">Panels</h3>
+
+    <div class="endpoint">
+        <span class="endpoint-method post">POST</span>
+        <span class="endpoint-path">/panels</span>
+        <p>Create a panel overlay. <code>width</code> is optional (null = auto-width). <code>title</code> defaults to empty string.</p>
+<pre><code><span class="cmd">curl</span> -X POST http://localhost:9123/panels \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"name": "status", "title": "Status", "width": 120}'</span></code></pre>
+        <div class="response-label">Response 201</div>
+<pre><code>{<span class="str">"name"</span>: <span class="str">"status"</span>, <span class="str">"title"</span>: <span class="str">"Status"</span>, <span class="str">"width"</span>: 120}</code></pre>
+        <p>Returns <strong>400</strong> if <code>name</code> is missing or <code>width</code> is invalid.</p>
+    </div>
+
+    <div class="endpoint">
+        <span class="endpoint-method get">GET</span>
+        <span class="endpoint-path">/panels</span>
+        <p>List all panels.</p>
+<pre><code><span class="cmd">curl</span> http://localhost:9123/panels</code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>[{<span class="str">"name"</span>: <span class="str">"status"</span>, <span class="str">"title"</span>: <span class="str">"Status"</span>, <span class="str">"width"</span>: 120}]</code></pre>
+    </div>
+
+    <div class="endpoint">
+        <span class="endpoint-method put">PUT</span>
+        <span class="endpoint-path">/panels/:name</span>
+        <p>Update panel content. <code>focus_line</code> defaults to <code>-1</code> (focus on last line).</p>
+<pre><code><span class="cmd">curl</span> -X PUT http://localhost:9123/panels/status \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"text": "Running step 3", "focus_line": 5}'</span></code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>{<span class="str">"name"</span>: <span class="str">"status"</span>, <span class="str">"text"</span>: <span class="str">"Running step 3"</span>}</code></pre>
+        <p>Returns <strong>404</strong> if panel does not exist.</p>
+    </div>
+
+    <div class="endpoint">
+        <span class="endpoint-method delete">DELETE</span>
+        <span class="endpoint-path">/panels/:name</span>
+        <p>Remove a panel.</p>
+<pre><code><span class="cmd">curl</span> -X DELETE http://localhost:9123/panels/status</code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>{<span class="str">"status"</span>: <span class="str">"removed"</span>}</code></pre>
+        <p>Returns <strong>404</strong> if panel does not exist.</p>
+    </div>
+
+    <!-- ─── RECORDING ─── -->
+    <h3 id="recording">Recording</h3>
+
+    <div class="endpoint">
+        <span class="endpoint-method post">POST</span>
+        <span class="endpoint-path">/recording/start</span>
+        <p>Begin recording. Requires a <code>name</code> field.</p>
+<pre><code><span class="cmd">curl</span> -X POST http://localhost:9123/recording/start \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"name": "login_test"}'</span></code></pre>
+        <div class="response-label">Response 201</div>
+<pre><code>{<span class="str">"status"</span>: <span class="str">"recording"</span>, <span class="str">"name"</span>: <span class="str">"login_test"</span>}</code></pre>
+        <p>Returns <strong>409</strong> if already recording. <strong>400</strong> if <code>name</code> is missing.</p>
+    </div>
+
+    <div class="endpoint">
+        <span class="endpoint-method post">POST</span>
+        <span class="endpoint-path">/recording/stop</span>
+        <p>Stop recording. Returns the file path and elapsed time.</p>
+<pre><code><span class="cmd">curl</span> -X POST http://localhost:9123/recording/stop</code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>{<span class="str">"path"</span>: <span class="str">"/app/recordings/login_test.mp4"</span>, <span class="str">"elapsed"</span>: 45.2, <span class="str">"name"</span>: <span class="str">"login_test"</span>}</code></pre>
+        <p>Returns <strong>409</strong> if not currently recording.</p>
+    </div>
+
+    <div class="endpoint">
+        <span class="endpoint-method get">GET</span>
+        <span class="endpoint-path">/recording/elapsed</span>
+        <p>Get elapsed recording time in seconds. Returns <code>0.0</code> when not recording.</p>
+<pre><code><span class="cmd">curl</span> http://localhost:9123/recording/elapsed</code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>{<span class="str">"elapsed"</span>: 12.5}</code></pre>
+    </div>
+
+    <div class="endpoint">
+        <span class="endpoint-method get">GET</span>
+        <span class="endpoint-path">/recording/status</span>
+        <p>Get current recording state.</p>
+<pre><code><span class="cmd">curl</span> http://localhost:9123/recording/status</code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>{<span class="str">"recording"</span>: true, <span class="str">"name"</span>: <span class="str">"login_test"</span>, <span class="str">"elapsed"</span>: 12.5}</code></pre>
+    </div>
+
+    <!-- ─── RECORDINGS (FILES) ─── -->
+    <h3 id="recordings">Recordings (file access)</h3>
+
+    <div class="endpoint">
+        <span class="endpoint-method get">GET</span>
+        <span class="endpoint-path">/recordings</span>
+        <p>List all saved recordings.</p>
+<pre><code><span class="cmd">curl</span> http://localhost:9123/recordings</code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>[
+  {
+    <span class="str">"name"</span>: <span class="str">"login_test"</span>,
+    <span class="str">"path"</span>: <span class="str">"/app/recordings/login_test.mp4"</span>,
+    <span class="str">"size"</span>: 1234567,
+    <span class="str">"created"</span>: <span class="str">"2026-03-10T14:30:00+00:00"</span>
+  }
+]</code></pre>
+    </div>
+
+    <div class="endpoint">
+        <span class="endpoint-method get">GET</span>
+        <span class="endpoint-path">/recordings/:name</span>
+        <p>Download a recording as MP4. Supports range requests for video seeking.</p>
+<pre><code><span class="cm"># Download</span>
+<span class="cmd">curl</span> -O http://localhost:9123/recordings/login_test
+
+<span class="cm"># Range request</span>
+<span class="cmd">curl</span> -H <span class="str">"Range: bytes=0-1023"</span> http://localhost:9123/recordings/login_test
+
+<span class="cm"># wget</span>
+<span class="cmd">wget</span> http://localhost:9123/recordings/login_test -O login_test.mp4</code></pre>
+        <p>Returns <strong>404</strong> if recording does not exist. <strong>400</strong> if name contains path traversal characters. Range requests return <strong>206 Partial Content</strong>.</p>
+    </div>
+
+    <div class="endpoint">
+        <span class="endpoint-method get">GET</span>
+        <span class="endpoint-path">/recordings/:name/info</span>
+        <p>Get metadata for a recording without downloading it.</p>
+<pre><code><span class="cmd">curl</span> http://localhost:9123/recordings/login_test/info</code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>{
+  <span class="str">"name"</span>: <span class="str">"login_test"</span>,
+  <span class="str">"path"</span>: <span class="str">"/app/recordings/login_test.mp4"</span>,
+  <span class="str">"size"</span>: 1234567,
+  <span class="str">"created"</span>: <span class="str">"2026-03-10T14:30:00+00:00"</span>
+}</code></pre>
+    </div>
+
+    <!-- ─── HEALTH ─── -->
+    <h3 id="health">Health &amp; Utility</h3>
+
+    <div class="endpoint">
+        <span class="endpoint-method get">GET</span>
+        <span class="endpoint-path">/health</span>
+        <p>Server health check. Returns display state, active panels, and uptime.</p>
+<pre><code><span class="cmd">curl</span> http://localhost:9123/health</code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>{
+  <span class="str">"status"</span>: <span class="str">"ok"</span>,
+  <span class="str">"recording"</span>: false,
+  <span class="str">"display"</span>: <span class="str">":99"</span>,
+  <span class="str">"panels"</span>: [<span class="str">"status"</span>, <span class="str">"scenario"</span>],
+  <span class="str">"uptime"</span>: 123.4
+}</code></pre>
+    </div>
+
+    <div class="endpoint">
+        <span class="endpoint-method post">POST</span>
+        <span class="endpoint-path">/cleanup</span>
+        <p>Full teardown: stops any active recording, stops the display, removes all panels.</p>
+<pre><code><span class="cmd">curl</span> -X POST http://localhost:9123/cleanup</code></pre>
+        <div class="response-label">Response 200</div>
+<pre><code>{<span class="str">"status"</span>: <span class="str">"cleaned"</span>}</code></pre>
+    </div>
+
+    <!-- ─── ERRORS ─── -->
+    <h2 id="errors">Error Responses</h2>
+
+    <p>All errors return JSON with an <code>error</code> field:</p>
+
+<pre><code>{<span class="str">"error"</span>: <span class="str">"panel 'foo' not found"</span>}</code></pre>
+
+    <table>
+        <thead>
+            <tr><th>Status</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><code>400</code></td><td>Bad request (missing/invalid fields)</td></tr>
+            <tr><td><code>404</code></td><td>Resource not found (panel or recording)</td></tr>
+            <tr><td><code>405</code></td><td>Method not allowed</td></tr>
+            <tr><td><code>409</code></td><td>Conflict (display already started, already recording, not recording)</td></tr>
+            <tr><td><code>416</code></td><td>Range not satisfiable</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ─── CORS ─── -->
+    <h2 id="cors">CORS</h2>
+
+    <p>Enable CORS with <code>--cors</code> to allow browser-based dashboards to access recordings:</p>
+
+<pre><code><span class="cmd">thea</span> serve <span class="flag">--port</span> <span class="val">9123</span> <span class="flag">--cors</span></code></pre>
+
+    <p>This adds <code>Access-Control-Allow-Origin: *</code> to all responses and handles preflight <code>OPTIONS</code> requests.</p>
+
+    <!-- ─── SHUTDOWN ─── -->
+    <h2 id="shutdown">Graceful Shutdown</h2>
+
+    <p>The server handles <code>SIGTERM</code> gracefully:</p>
+
+    <ol>
+        <li>Stops any in-progress ffmpeg recording (video is finalised)</li>
+        <li>Stops Xvfb</li>
+        <li>Removes panel temp files</li>
+        <li>Exits cleanly</li>
+    </ol>
+
+    <div class="callout tip">
+        <strong>Docker safe</strong>
+        This means <code>docker stop</code> will not lose a recording in progress.
+    </div>
+
+    <h2>Thread Safety</h2>
+
+    <p>All endpoints that mutate recorder state are protected by a <code>threading.Lock</code>. Concurrent callers (e.g., multiple SDK clients or panel updates from different threads) are safe.</p>
+
+</main>
+
+<script>
+function toggleSidebar() {
+    document.querySelector('.sidebar').classList.toggle('open');
+    document.querySelector('.sidebar-overlay').classList.toggle('open');
+}
+</script>
+</body>
+</html>

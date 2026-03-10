@@ -1,0 +1,66 @@
+# E2E test: starts the recorder server, then runs a simple test in each SDK language.
+# Usage: docker compose up --build --abort-on-container-exit
+
+services:
+  recorder:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile.server
+    ports:
+      - "9123:9123"
+    shm_size: 2g
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9123/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+  test-go:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile.go
+    environment:
+      RECORDER_URL: http://recorder:9123
+    depends_on:
+      recorder:
+        condition: service_healthy
+
+  test-python:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile.python
+    environment:
+      RECORDER_URL: http://recorder:9123
+    depends_on:
+      recorder:
+        condition: service_healthy
+
+  test-ruby:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile.ruby
+    environment:
+      RECORDER_URL: http://recorder:9123
+    depends_on:
+      recorder:
+        condition: service_healthy
+
+  test-node:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile.node
+    environment:
+      RECORDER_URL: http://recorder:9123
+    depends_on:
+      recorder:
+        condition: service_healthy
+
+  test-java:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile.java
+    environment:
+      RECORDER_URL: http://recorder:9123
+    depends_on:
+      recorder:
+        condition: service_healthy

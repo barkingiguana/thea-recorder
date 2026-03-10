@@ -1,0 +1,8 @@
+FROM node:20-slim
+
+WORKDIR /app
+COPY sdks/node/ .
+RUN npm ci && npm run build
+
+COPY tests/e2e/test_e2e.mjs .
+CMD ["node", "test_e2e.mjs"]

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SDKs — thea-recorder docs</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topnav">
+    <a href="../index.html" class="topnav-brand">
+        <span class="topnav-rec"></span>
+        <span>thea-recorder</span>
+    </a>
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+    </button>
+    <ul class="topnav-links">
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="https://github.com/BarkingIguana/thea-recorder">GitHub</a></li>
+    </ul>
+</header>
+
+<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+<aside class="sidebar">
+    <div class="sidebar-section">
+        <h3>Getting Started</h3>
+        <ul>
+            <li><a href="index.html">Quick Start</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>Reference</h3>
+        <ul>
+            <li><a href="server.html">Server &amp; API</a></li>
+            <li><a href="sdks.html" class="active">SDKs</a></li>
+            <li><a href="cli.html">CLI</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>Deployment</h3>
+        <ul>
+            <li><a href="docker.html">Docker &amp; CI</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>On this page</h3>
+        <ul>
+            <li><a href="#python">Python</a></li>
+            <li><a href="#go">Go</a></li>
+            <li><a href="#ruby">Ruby</a></li>
+            <li><a href="#node">Node / TypeScript</a></li>
+            <li><a href="#bash">Bash / curl</a></li>
+            <li><a href="#api-surface">Common API Surface</a></li>
+            <li><a href="#helpers">Convenience Helpers</a></li>
+            <li><a href="#config">Configuration</a></li>
+        </ul>
+    </div>
+</aside>
+
+<main class="content">
+    <h1>SDKs
+        <span class="subtitle">Thin HTTP client libraries for every language</span>
+    </h1>
+
+    <p class="lead">
+        Each SDK wraps the REST API with idiomatic method calls, error handling, and convenience helpers.
+        Every SDK follows the same pattern: connect, record, done.
+    </p>
+
+    <!-- ─── PYTHON ─── -->
+    <h2 id="python">Python</h2>
+
+    <h4>Install</h4>
+<pre><code><span class="cmd">pip install</span> thea-recorder</code><span class="lang-label">bash</span></pre>
+
+    <h4>Quick start</h4>
+<pre><code><span class="kw">from</span> thea <span class="kw">import</span> RecorderClient
+
+client = RecorderClient(<span class="str">"http://localhost:9123"</span>)
+<span class="kw">with</span> client.recording(<span class="str">"login_test"</span>) <span class="kw">as</span> result:
+    <span class="kw">pass</span>  <span class="cm"># your test code here</span>
+print(result.path)</code><span class="lang-label">python</span></pre>
+
+    <h4>pytest integration</h4>
+<pre><code><span class="cm"># conftest.py</span>
+<span class="kw">import</span> pytest
+<span class="kw">from</span> thea <span class="kw">import</span> RecorderClient
+
+@pytest.fixture(scope=<span class="str">"session"</span>)
+<span class="kw">def</span> <span class="fn">recorder</span>():
+    client = RecorderClient(<span class="str">"http://localhost:9123"</span>)
+    client.wait_until_ready(timeout=30)
+    client.start_display()
+    client.add_panel(<span class="str">"status"</span>, title=<span class="str">"Status"</span>, width=120)
+    <span class="kw">yield</span> client
+    client.cleanup()
+
+@pytest.fixture(autouse=<span class="val">True</span>)
+<span class="kw">def</span> <span class="fn">record_test</span>(request, recorder):
+    <span class="kw">with</span> recorder.recording(request.node.name):
+        recorder.update_panel(<span class="str">"status"</span>, <span class="str">"Running"</span>)
+        <span class="kw">yield</span>
+        recorder.update_panel(<span class="str">"status"</span>, <span class="str">"Done"</span>)</code><span class="lang-label">python</span></pre>
+
+    <h4>Behave integration</h4>
+<pre><code><span class="cm"># features/environment.py</span>
+<span class="kw">from</span> thea <span class="kw">import</span> RecorderClient
+
+client = RecorderClient(<span class="str">"http://localhost:9123"</span>)
+
+<span class="kw">def</span> <span class="fn">before_all</span>(context):
+    client.wait_until_ready(timeout=30)
+    client.start_display()
+    client.add_panel(<span class="str">"status"</span>, title=<span class="str">"Status"</span>, width=120)
+    client.add_panel(<span class="str">"scenario"</span>, title=<span class="str">"Scenario"</span>)
+
+<span class="kw">def</span> <span class="fn">before_scenario</span>(context, scenario):
+    client.update_panel(<span class="str">"status"</span>, <span class="str">"Running"</span>)
+    client.start_recording(scenario.name)
+
+<span class="kw">def</span> <span class="fn">after_scenario</span>(context, scenario):
+    result = client.stop_recording()
+    print(<span class="str">f"Video: </span>{result[<span class="str">'path'</span>]}<span class="str">"</span>)
+
+<span class="kw">def</span> <span class="fn">after_all</span>(context):
+    client.cleanup()</code><span class="lang-label">python</span></pre>
+
+    <!-- ─── GO ─── -->
+    <h2 id="go">Go</h2>
+
+    <h4>Install</h4>
+<pre><code><span class="cmd">go get</span> github.com/BarkingIguana/thea-recorder/sdks/go</code><span class="lang-label">bash</span></pre>
+
+    <h4>Quick start</h4>
+<pre><code>client := recorder.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
+result, _ := client.<span class="fn">Recording</span>(ctx, <span class="str">"login_test"</span>, <span class="kw">func</span>() error {
+    <span class="cm">// your test code here</span>
+    <span class="kw">return</span> <span class="val">nil</span>
+})
+fmt.<span class="fn">Println</span>(result.Path)</code><span class="lang-label">go</span></pre>
+
+    <h4>godog integration</h4>
+<pre><code><span class="kw">func</span> <span class="fn">InitializeTestSuite</span>(ctx *godog.TestSuiteContext) {
+    ctx.<span class="fn">BeforeSuite</span>(<span class="kw">func</span>() {
+        client = recorder.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
+        c := context.<span class="fn">Background</span>()
+        client.<span class="fn">WaitUntilReady</span>(c, 30*time.Second)
+        client.<span class="fn">StartDisplay</span>(c)
+        client.<span class="fn">AddPanel</span>(c, <span class="str">"status"</span>, <span class="str">"Status"</span>, <span class="fn">intPtr</span>(120))
+    })
+
+    ctx.<span class="fn">AfterSuite</span>(<span class="kw">func</span>() {
+        client.<span class="fn">Cleanup</span>(context.<span class="fn">Background</span>())
+    })
+}
+
+<span class="kw">func</span> <span class="fn">InitializeScenario</span>(ctx *godog.ScenarioContext) {
+    ctx.<span class="fn">Before</span>(<span class="kw">func</span>(ctx context.Context, sc *godog.Scenario) (context.Context, error) {
+        client.<span class="fn">StartRecording</span>(ctx, sc.Name)
+        <span class="kw">return</span> ctx, <span class="val">nil</span>
+    })
+
+    ctx.<span class="fn">After</span>(<span class="kw">func</span>(ctx context.Context, sc *godog.Scenario, err error) (context.Context, error) {
+        result, _ := client.<span class="fn">StopRecording</span>(ctx)
+        fmt.<span class="fn">Printf</span>(<span class="str">"Video: %s (%.1fs)\n"</span>, result.Path, result.Elapsed)
+        <span class="kw">return</span> ctx, <span class="val">nil</span>
+    })
+}</code><span class="lang-label">go</span></pre>
+
+    <!-- ─── RUBY ─── -->
+    <h2 id="ruby">Ruby</h2>
+
+    <h4>Install</h4>
+<pre><code><span class="cmd">gem build</span> thea-recorder.gemspec && <span class="cmd">gem install</span> thea-recorder-*.gem</code><span class="lang-label">bash</span></pre>
+
+    <h4>Quick start</h4>
+<pre><code><span class="kw">require</span> <span class="str">"recorder"</span>
+
+client = Recorder::Client.new(<span class="str">"http://localhost:9123"</span>)
+client.recording(<span class="str">"login_test"</span>) <span class="kw">do</span>
+  <span class="cm"># your test code here</span>
+<span class="kw">end</span></code><span class="lang-label">ruby</span></pre>
+
+    <h4>Cucumber integration</h4>
+<pre><code><span class="cm"># features/support/env.rb</span>
+<span class="kw">require</span> <span class="str">"recorder"</span>
+
+$recorder = Recorder::Client.new(
+  ENV.fetch(<span class="str">"RECORDER_URL"</span>, <span class="str">"http://localhost:9123"</span>)
+)
+$recorder.wait_until_ready(timeout: 30)
+$recorder.start_display
+$recorder.add_panel(<span class="str">"status"</span>, title: <span class="str">"Status"</span>, width: 120)
+
+Before <span class="kw">do</span> |scenario|
+  $recorder.update_panel(<span class="str">"status"</span>, text: <span class="str">"Running"</span>)
+  $recorder.start_recording(scenario.name)
+<span class="kw">end</span>
+
+After <span class="kw">do</span> |scenario|
+  $recorder.update_panel(<span class="str">"status"</span>, text: scenario.passed? ? <span class="str">"PASSED"</span> : <span class="str">"FAILED"</span>)
+  $recorder.stop_recording
+<span class="kw">end</span>
+
+at_exit { $recorder.cleanup }</code><span class="lang-label">ruby</span></pre>
+
+    <!-- ─── NODE ─── -->
+    <h2 id="node">Node / TypeScript</h2>
+
+    <h4>Install</h4>
+<pre><code><span class="cmd">npm install</span> thea-recorder</code><span class="lang-label">bash</span></pre>
+
+    <h4>Quick start</h4>
+<pre><code><span class="kw">import</span> { RecorderClient } <span class="kw">from</span> <span class="str">"thea-recorder"</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">RecorderClient</span>(<span class="str">"http://localhost:9123"</span>);
+<span class="kw">const</span> result = <span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () => {
+  <span class="cm">// your test code here</span>
+});
+console.<span class="fn">log</span>(result.path);</code><span class="lang-label">typescript</span></pre>
+
+    <h4>Playwright integration</h4>
+<pre><code><span class="kw">import</span> { test } <span class="kw">from</span> <span class="str">"@playwright/test"</span>;
+<span class="kw">import</span> { RecorderClient } <span class="kw">from</span> <span class="str">"thea-recorder"</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">RecorderClient</span>(<span class="str">"http://localhost:9123"</span>);
+
+test.<span class="fn">beforeEach</span>(<span class="kw">async</span> ({}, testInfo) => {
+  <span class="kw">await</span> client.<span class="fn">startRecording</span>(testInfo.title);
+  <span class="kw">await</span> client.<span class="fn">updatePanel</span>(<span class="str">"status"</span>, <span class="str">"Running"</span>);
+});
+
+test.<span class="fn">afterEach</span>(<span class="kw">async</span> ({}, testInfo) => {
+  <span class="kw">await</span> client.<span class="fn">updatePanel</span>(<span class="str">"status"</span>,
+    testInfo.status === <span class="str">"passed"</span> ? <span class="str">"PASSED"</span> : <span class="str">"FAILED"</span>);
+  <span class="kw">const</span> result = <span class="kw">await</span> client.<span class="fn">stopRecording</span>();
+  console.<span class="fn">log</span>(<span class="str">`Video: </span>${result.path}<span class="str">`</span>);
+});
+
+test(<span class="str">"login flow"</span>, <span class="kw">async</span> ({ page }) => {
+  <span class="kw">await</span> page.<span class="fn">goto</span>(<span class="str">"http://localhost:3000/login"</span>);
+  <span class="cm">// ...</span>
+});</code><span class="lang-label">typescript</span></pre>
+
+    <!-- ─── BASH / CURL ─── -->
+    <h2 id="bash">Bash / curl</h2>
+
+    <p>No SDK needed. Use the <code>thea</code> CLI or plain <code>curl</code> calls.</p>
+
+    <h4>CLI quick start</h4>
+<pre><code><span class="kw">export</span> RECORDER_URL=http://localhost:9123
+
+<span class="cmd">thea</span> start-display
+<span class="cmd">thea</span> add-panel <span class="flag">--name</span> status <span class="flag">--title</span> Status <span class="flag">--width</span> 120
+<span class="cmd">thea</span> start-recording <span class="flag">--name</span> login_test
+<span class="cmd">thea</span> update-panel <span class="flag">--name</span> status <span class="flag">--text</span> <span class="str">"Running"</span>
+
+<span class="cm"># ... run your tests ...</span>
+
+<span class="cmd">thea</span> update-panel <span class="flag">--name</span> status <span class="flag">--text</span> <span class="str">"PASSED"</span>
+<span class="cmd">thea</span> stop-recording
+<span class="cmd">thea</span> cleanup</code><span class="lang-label">bash</span></pre>
+
+    <h4>curl quick start</h4>
+<pre><code><span class="cm"># Start display</span>
+<span class="cmd">curl</span> -X POST http://localhost:9123/display/start
+
+<span class="cm"># Start recording</span>
+<span class="cmd">curl</span> -X POST http://localhost:9123/recording/start \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"name": "login_test"}'</span>
+
+<span class="cm"># ... run your tests ...</span>
+
+<span class="cm"># Stop recording</span>
+<span class="cmd">curl</span> -X POST http://localhost:9123/recording/stop
+
+<span class="cm"># Cleanup</span>
+<span class="cmd">curl</span> -X POST http://localhost:9123/cleanup</code><span class="lang-label">bash</span></pre>
+
+    <hr>
+
+    <!-- ─── API SURFACE ─── -->
+    <h2 id="api-surface">Common API Surface</h2>
+
+    <p>Every SDK provides these methods (names may be camelCase or snake_case per language convention):</p>
+
+    <table>
+        <thead>
+            <tr><th>Method</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><code>start_display()</code></td><td>Launch Xvfb</td></tr>
+            <tr><td><code>stop_display()</code></td><td>Stop Xvfb</td></tr>
+            <tr><td><code>add_panel(name, title, width)</code></td><td>Add overlay panel</td></tr>
+            <tr><td><code>update_panel(name, text, focus_line)</code></td><td>Update panel content</td></tr>
+            <tr><td><code>remove_panel(name)</code></td><td>Remove panel</td></tr>
+            <tr><td><code>list_panels()</code></td><td>List all panels</td></tr>
+            <tr><td><code>start_recording(name)</code></td><td>Begin recording</td></tr>
+            <tr><td><code>stop_recording()</code></td><td>Stop recording, get path + elapsed</td></tr>
+            <tr><td><code>recording_elapsed()</code></td><td>Get elapsed seconds</td></tr>
+            <tr><td><code>recording_status()</code></td><td>Get recording state</td></tr>
+            <tr><td><code>list_recordings()</code></td><td>List available MP4 files</td></tr>
+            <tr><td><code>download_recording(name, path)</code></td><td>Download MP4 to local file</td></tr>
+            <tr><td><code>recording_info(name)</code></td><td>Get file metadata</td></tr>
+            <tr><td><code>health()</code></td><td>Server health check</td></tr>
+            <tr><td><code>cleanup()</code></td><td>Full teardown</td></tr>
+        </tbody>
+    </table>
+
+    <!-- ─── HELPERS ─── -->
+    <h2 id="helpers">Convenience Helpers</h2>
+
+    <p>Every SDK provides scoped helpers that handle start/stop automatically:</p>
+
+    <table>
+        <thead>
+            <tr><th>Helper</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+            <tr><td><code>recording(name)</code></td><td>Start recording, run code, stop recording (even on error)</td></tr>
+            <tr><td><code>with_panel(name, ...)</code></td><td>Add panel, run code, remove panel</td></tr>
+            <tr><td><code>wait_until_ready(timeout)</code></td><td>Poll <code>/health</code> until server responds</td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout tip">
+        <strong>Tip</strong>
+        Always use <code>recording()</code> instead of manual start/stop. It handles cleanup on test failure so you never lose a recording or leave the server in a bad state.
+    </div>
+
+    <!-- ─── CONFIG ─── -->
+    <h2 id="config">Configuration</h2>
+
+    <table>
+        <thead>
+            <tr><th>Config</th><th>Method</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>URL</td><td>Constructor argument</td></tr>
+            <tr><td><code>RECORDER_URL</code></td><td>Environment variable (fallback if no URL passed)</td></tr>
+            <tr><td>Timeout</td><td>Configurable per SDK (default 30s)</td></tr>
+        </tbody>
+    </table>
+
+</main>
+
+<script>
+function toggleSidebar() {
+    document.querySelector('.sidebar').classList.toggle('open');
+    document.querySelector('.sidebar-overlay').classList.toggle('open');
+}
+</script>
+</body>
+</html>

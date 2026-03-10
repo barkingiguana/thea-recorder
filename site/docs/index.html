@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting Started — thea-recorder docs</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ═══ TOP NAV ═══ -->
+<header class="topnav">
+    <a href="../index.html" class="topnav-brand">
+        <span class="topnav-rec"></span>
+        <span>thea-recorder</span>
+    </a>
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Toggle navigation">
+        <span></span><span></span><span></span>
+    </button>
+    <ul class="topnav-links">
+        <li><a href="../index.html">Home</a></li>
+        <li><a href="https://github.com/BarkingIguana/thea-recorder">GitHub</a></li>
+    </ul>
+</header>
+
+<!-- ═══ SIDEBAR ═══ -->
+<div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+<aside class="sidebar">
+    <div class="sidebar-section">
+        <h3>Getting Started</h3>
+        <ul>
+            <li><a href="index.html" class="active">Quick Start</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>Reference</h3>
+        <ul>
+            <li><a href="server.html">Server &amp; API</a></li>
+            <li><a href="sdks.html">SDKs</a></li>
+            <li><a href="cli.html">CLI</a></li>
+        </ul>
+    </div>
+    <div class="sidebar-section">
+        <h3>Deployment</h3>
+        <ul>
+            <li><a href="docker.html">Docker &amp; CI</a></li>
+        </ul>
+    </div>
+</aside>
+
+<!-- ═══ CONTENT ═══ -->
+<main class="content">
+    <h1>Getting Started
+        <span class="subtitle">Record your E2E tests. Watch them back.</span>
+    </h1>
+
+    <p class="lead">
+        thea-recorder captures browser tests as MP4 video with live panel overlays.
+        Run the server on any Linux machine with a virtual display, then control it from any language over HTTP.
+    </p>
+
+    <div class="callout tip">
+        <strong>Good to know</strong>
+        System dependencies (Xvfb, ffmpeg) are only needed on the machine running the server.
+        Your test code just talks to it over HTTP &mdash; install the SDK for your language and go.
+    </div>
+
+    <!-- ─── STEPS ─── -->
+    <div class="steps">
+
+        <div class="step">
+            <h3>Install the server</h3>
+            <pre><code><span class="cm"># Install system deps (Linux)</span>
+<span class="cmd">sudo apt-get install</span> xvfb ffmpeg
+
+<span class="cm"># Install thea-recorder</span>
+<span class="cmd">pip install</span> thea-recorder</code></pre>
+        </div>
+
+        <div class="step">
+            <h3>Start the server</h3>
+            <pre><code><span class="cmd">thea</span> serve</code></pre>
+            <p>The server is now listening on <code>http://localhost:9123</code>. It manages the virtual display, panel overlays, and ffmpeg recording.</p>
+        </div>
+
+        <div class="step">
+            <h3>Pick your language and record</h3>
+
+            <div class="lang-tabs">
+                <button class="lang-tab active" onclick="switchTab(event, 'python')">Python</button>
+                <button class="lang-tab" onclick="switchTab(event, 'go')">Go</button>
+                <button class="lang-tab" onclick="switchTab(event, 'ruby')">Ruby</button>
+                <button class="lang-tab" onclick="switchTab(event, 'node')">Node / TS</button>
+                <button class="lang-tab" onclick="switchTab(event, 'bash')">Bash</button>
+                <button class="lang-tab" onclick="switchTab(event, 'curl')">curl</button>
+            </div>
+
+            <div class="lang-panel active" id="panel-python">
+<pre><code><span class="kw">from</span> thea <span class="kw">import</span> RecorderClient
+
+client = RecorderClient(<span class="str">"http://localhost:9123"</span>)
+<span class="kw">with</span> client.recording(<span class="str">"login_test"</span>):
+    ...  <span class="cm"># your test code here</span></code><span class="lang-label">python</span></pre>
+                <p>Install: <code>pip install thea-recorder</code> &mdash; <a href="sdks.html#python">Python SDK docs</a></p>
+            </div>
+
+            <div class="lang-panel" id="panel-go">
+<pre><code>client := recorder.<span class="fn">NewClient</span>(<span class="str">"http://localhost:9123"</span>)
+result, _ := client.<span class="fn">Recording</span>(ctx, <span class="str">"login_test"</span>, <span class="kw">func</span>() error {
+    <span class="cm">// your test code here</span>
+    <span class="kw">return</span> <span class="val">nil</span>
+})</code><span class="lang-label">go</span></pre>
+                <p>Install: <code>go get github.com/BarkingIguana/thea-recorder/sdks/go</code> &mdash; <a href="sdks.html#go">Go SDK docs</a></p>
+            </div>
+
+            <div class="lang-panel" id="panel-ruby">
+<pre><code><span class="kw">require</span> <span class="str">"recorder"</span>
+
+client = Recorder::Client.new(<span class="str">"http://localhost:9123"</span>)
+client.recording(<span class="str">"login_test"</span>) <span class="kw">do</span>
+  <span class="cm"># your test code here</span>
+<span class="kw">end</span></code><span class="lang-label">ruby</span></pre>
+                <p>Install: <code>gem install thea-recorder</code> &mdash; <a href="sdks.html#ruby">Ruby SDK docs</a></p>
+            </div>
+
+            <div class="lang-panel" id="panel-node">
+<pre><code><span class="kw">import</span> { RecorderClient } <span class="kw">from</span> <span class="str">"thea-recorder"</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">RecorderClient</span>(<span class="str">"http://localhost:9123"</span>);
+<span class="kw">const</span> result = <span class="kw">await</span> client.<span class="fn">recording</span>(<span class="str">"login_test"</span>, <span class="kw">async</span> () => {
+  <span class="cm">// your test code here</span>
+});</code><span class="lang-label">typescript</span></pre>
+                <p>Install: <code>npm install thea-recorder</code> &mdash; <a href="sdks.html#node">Node SDK docs</a></p>
+            </div>
+
+            <div class="lang-panel" id="panel-bash">
+<pre><code><span class="kw">export</span> RECORDER_URL=http://localhost:9123
+
+<span class="cmd">thea</span> start-display
+<span class="cmd">thea</span> start-recording <span class="flag">--name</span> <span class="str">login_test</span>
+<span class="cm"># ... run your tests ...</span>
+<span class="cmd">thea</span> stop-recording
+<span class="cmd">thea</span> cleanup</code><span class="lang-label">bash</span></pre>
+                <p>The <code>thea</code> CLI is included with <code>pip install thea-recorder</code> &mdash; <a href="cli.html">CLI docs</a></p>
+            </div>
+
+            <div class="lang-panel" id="panel-curl">
+<pre><code><span class="cm"># Start display</span>
+<span class="cmd">curl</span> -X POST http://localhost:9123/display/start
+
+<span class="cm"># Start recording</span>
+<span class="cmd">curl</span> -X POST http://localhost:9123/recording/start \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"name": "login_test"}'</span>
+
+<span class="cm"># Stop recording</span>
+<span class="cmd">curl</span> -X POST http://localhost:9123/recording/stop</code><span class="lang-label">curl</span></pre>
+                <p>Every SDK method maps 1:1 to a REST endpoint &mdash; <a href="server.html#api-reference">API reference</a></p>
+            </div>
+        </div>
+
+    </div><!-- /steps -->
+
+    <hr>
+
+    <h2>Next steps</h2>
+
+    <div class="sdk-grid">
+        <a href="server.html" class="sdk-card">
+            <h4>Server &amp; API</h4>
+            <p>Server flags, full REST API reference with curl examples</p>
+        </a>
+        <a href="sdks.html" class="sdk-card">
+            <h4>SDKs</h4>
+            <p>Python, Go, Ruby, Node/TS &mdash; quick starts and API tables</p>
+        </a>
+        <a href="cli.html" class="sdk-card">
+            <h4>CLI Reference</h4>
+            <p>Server mode, client commands, scripting examples</p>
+        </a>
+        <a href="docker.html" class="sdk-card">
+            <h4>Docker &amp; CI</h4>
+            <p>Dockerfile, Compose, GitHub Actions</p>
+        </a>
+    </div>
+
+</main>
+
+<script>
+function switchTab(e, lang) {
+    document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.lang-panel').forEach(p => p.classList.remove('active'));
+    e.target.classList.add('active');
+    document.getElementById('panel-' + lang).classList.add('active');
+}
+
+function toggleSidebar() {
+    document.querySelector('.sidebar').classList.toggle('open');
+    document.querySelector('.sidebar-overlay').classList.toggle('open');
+}
+</script>
+</body>
+</html>
