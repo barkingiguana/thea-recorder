@@ -65,7 +65,7 @@ client.recording("login_test", () -> {
 
 | Language | Install |
 |---|---|
-| Go | `go get github.com/BarkingIguana/thea-recorder/sdks/go` |
+| Go | `go get github.com/barkingiguana/thea-recorder/sdks/go` |
 | Python | `pip install ./sdks/python` (or copy `thea/`) |
 | Ruby | `gem build thea-recorder.gemspec && gem install thea-recorder-*.gem` |
 | Node | `npm install ./sdks/node` |

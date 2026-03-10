@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/BarkingIguana/thea-recorder/sdks/go/recorder"
+	"github.com/barkingiguana/thea-recorder/sdks/go/recorder"
 )
 
 // ---------------------------------------------------------------------------

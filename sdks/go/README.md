@@ -1,11 +1,11 @@
 # thea-recorder Go SDK
 
-A Go client library for the [thea-recorder](https://github.com/BarkingIguana/thea-recorder) HTTP server. Zero external dependencies — uses only the Go standard library.
+A Go client library for the [thea-recorder](https://github.com/barkingiguana/thea-recorder) HTTP server. Zero external dependencies — uses only the Go standard library.
 
 ## Installation
 
 ```bash
-go get github.com/BarkingIguana/thea-recorder/sdks/go
+go get github.com/barkingiguana/thea-recorder/sdks/go
 ```
 
 ## Quick start
@@ -18,7 +18,7 @@ import (
     "log"
     "time"
 
-    "github.com/BarkingIguana/thea-recorder/sdks/go/recorder"
+    "github.com/barkingiguana/thea-recorder/sdks/go/recorder"
 )
 
 func main() {

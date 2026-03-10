@@ -54,7 +54,7 @@ import (
     "time"
 
     "github.com/cucumber/godog"
-    recorder "github.com/BarkingIguana/thea-recorder/sdks/go/recorder"
+    recorder "github.com/barkingiguana/thea-recorder/sdks/go/recorder"
 )
 
 var (

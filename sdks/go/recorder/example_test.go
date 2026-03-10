@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/BarkingIguana/thea-recorder/sdks/go/recorder"
+	"github.com/barkingiguana/thea-recorder/sdks/go/recorder"
 )
 
 // ExampleNewClient demonstrates creating a client with the default URL.
