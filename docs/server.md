@@ -386,6 +386,215 @@ continue to work as before and operate on the **default** session.
 
 See [Orchestration guide](orchestration.md) for parallel recording examples.
 
+## Director (Human-like Interaction)
+
+The Director endpoints let you simulate human-like mouse, keyboard, and window
+interactions on the virtual display.  Mouse movements follow minimum-jerk
+trajectories; typing uses realistic rhythm models.
+
+All Director endpoints are available under both `/director/...` (default
+session) and `/sessions/{name}/director/...` (named session).
+
+### Mouse
+
+#### Move mouse
+```bash
+curl -X POST http://localhost:9123/director/mouse/move \
+  -H "Content-Type: application/json" \
+  -d '{"x": 500, "y": 300}'
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `x` | yes | Target X coordinate |
+| `y` | yes | Target Y coordinate |
+| `duration` | no | Movement duration in seconds (default: Fitts's Law estimate) |
+| `target_width` | no | Target element width for Fitts's Law calculation |
+
+**Response** `200`: `{"status": "ok"}`
+
+#### Click
+```bash
+curl -X POST http://localhost:9123/director/mouse/click \
+  -H "Content-Type: application/json" \
+  -d '{"x": 500, "y": 300}'
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `x` | no | X coordinate (omit to click in place) |
+| `y` | no | Y coordinate (omit to click in place) |
+| `button` | no | Mouse button: 1=left, 2=middle, 3=right (default: 1) |
+| `duration` | no | Movement duration in seconds |
+
+**Response** `200`: `{"status": "ok"}`
+
+#### Double-click
+```bash
+curl -X POST http://localhost:9123/director/mouse/double-click \
+  -H "Content-Type: application/json" \
+  -d '{"x": 500, "y": 300}'
+```
+Optional `x`, `y` fields. **Response** `200`: `{"status": "ok"}`
+
+#### Right-click
+```bash
+curl -X POST http://localhost:9123/director/mouse/right-click \
+  -H "Content-Type: application/json" \
+  -d '{"x": 500, "y": 300}'
+```
+Optional `x`, `y` fields. **Response** `200`: `{"status": "ok"}`
+
+#### Drag
+```bash
+curl -X POST http://localhost:9123/director/mouse/drag \
+  -H "Content-Type: application/json" \
+  -d '{"start_x": 100, "start_y": 200, "end_x": 500, "end_y": 400}'
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `start_x` | yes | Start X |
+| `start_y` | yes | Start Y |
+| `end_x` | yes | End X |
+| `end_y` | yes | End Y |
+| `button` | no | Mouse button (default: 1) |
+| `duration` | no | Drag duration in seconds |
+
+**Response** `200`: `{"status": "ok"}`
+
+#### Scroll
+```bash
+curl -X POST http://localhost:9123/director/mouse/scroll \
+  -H "Content-Type: application/json" \
+  -d '{"clicks": 3}'
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `clicks` | yes | Scroll clicks (positive=up, negative=down) |
+| `x` | no | X coordinate |
+| `y` | no | Y coordinate |
+
+**Response** `200`: `{"status": "ok"}`
+
+#### Get mouse position
+```bash
+curl http://localhost:9123/director/mouse/position
+```
+**Response** `200`: `{"x": 500, "y": 300}`
+
+### Keyboard
+
+#### Type text
+```bash
+curl -X POST http://localhost:9123/director/keyboard/type \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello, world!"}'
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `text` | yes | Text to type |
+| `wpm` | no | Typing speed in words per minute (default: realistic rhythm model) |
+
+**Response** `200`: `{"status": "ok"}`
+
+#### Press keys
+```bash
+curl -X POST http://localhost:9123/director/keyboard/press \
+  -H "Content-Type: application/json" \
+  -d '{"keys": ["ctrl+a", "Delete"]}'
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `keys` | yes | Array of key names (e.g. `["Return"]`, `["ctrl+c"]`) |
+
+**Response** `200`: `{"status": "ok"}`
+
+#### Hold key
+```bash
+curl -X POST http://localhost:9123/director/keyboard/hold \
+  -H "Content-Type: application/json" \
+  -d '{"key": "Shift_L"}'
+```
+**Response** `200`: `{"status": "ok"}`
+
+#### Release key
+```bash
+curl -X POST http://localhost:9123/director/keyboard/release \
+  -H "Content-Type: application/json" \
+  -d '{"key": "Shift_L"}'
+```
+**Response** `200`: `{"status": "ok"}`
+
+### Window Management
+
+#### Find window
+```bash
+curl -X POST http://localhost:9123/director/window/find \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Firefox"}'
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | one of `name`/`class` | Window title substring |
+| `class` | one of `name`/`class` | Window class |
+| `timeout` | no | Search timeout in seconds (default: 10) |
+
+**Response** `200`: `{"window_id": "12345"}`
+**Error** `404` if window not found within timeout.
+
+#### Focus window
+```bash
+curl -X POST http://localhost:9123/director/window/12345/focus
+```
+**Response** `200`: `{"status": "ok"}`
+
+#### Move window
+```bash
+curl -X POST http://localhost:9123/director/window/12345/move \
+  -H "Content-Type: application/json" \
+  -d '{"x": 0, "y": 0}'
+```
+**Response** `200`: `{"status": "ok"}`
+
+#### Resize window
+```bash
+curl -X POST http://localhost:9123/director/window/12345/resize \
+  -H "Content-Type: application/json" \
+  -d '{"width": 1280, "height": 720}'
+```
+**Response** `200`: `{"status": "ok"}`
+
+#### Minimize window
+```bash
+curl -X POST http://localhost:9123/director/window/12345/minimize
+```
+**Response** `200`: `{"status": "ok"}`
+
+#### Get window geometry
+```bash
+curl http://localhost:9123/director/window/12345/geometry
+```
+**Response** `200`: `{"x": 0, "y": 0, "width": 1280, "height": 720}`
+
+#### Tile windows
+```bash
+curl -X POST http://localhost:9123/director/window/tile \
+  -H "Content-Type: application/json" \
+  -d '{"window_ids": ["111", "222"], "layout": "side-by-side"}'
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `window_ids` | yes | Array of window ID strings |
+| `layout` | no | `side-by-side`, `stacked`, or `grid` (default: `side-by-side`) |
+
+**Response** `200`: `{"status": "ok"}`
+
 ## Thread Safety
 
 All endpoints that mutate recorder state are protected by a `threading.Lock`. Concurrent callers (e.g., multiple SDK clients or panel updates from different threads) are safe.

@@ -617,6 +617,131 @@ class RecorderClient:
         helper.result = self.wait_for_composition(name)
 
     # ------------------------------------------------------------------
+    # Director — Mouse
+    # ------------------------------------------------------------------
+
+    def mouse_move(self, x: int, y: int, *, duration: float | None = None, target_width: float | None = None) -> dict[str, Any]:
+        """POST /director/mouse/move — move the mouse cursor."""
+        body: dict[str, Any] = {"x": x, "y": y}
+        if duration is not None:
+            body["duration"] = duration
+        if target_width is not None:
+            body["target_width"] = target_width
+        return self._request("POST", "/director/mouse/move", body)
+
+    def mouse_click(self, x: int | None = None, y: int | None = None, *, button: int = 1, duration: float | None = None) -> dict[str, Any]:
+        """POST /director/mouse/click — click the mouse."""
+        body: dict[str, Any] = {"button": button}
+        if x is not None:
+            body["x"] = x
+        if y is not None:
+            body["y"] = y
+        if duration is not None:
+            body["duration"] = duration
+        return self._request("POST", "/director/mouse/click", body)
+
+    def mouse_double_click(self, x: int | None = None, y: int | None = None) -> dict[str, Any]:
+        """POST /director/mouse/double-click — double-click."""
+        body: dict[str, Any] = {}
+        if x is not None:
+            body["x"] = x
+        if y is not None:
+            body["y"] = y
+        return self._request("POST", "/director/mouse/double-click", body)
+
+    def mouse_right_click(self, x: int | None = None, y: int | None = None) -> dict[str, Any]:
+        """POST /director/mouse/right-click — right-click."""
+        body: dict[str, Any] = {}
+        if x is not None:
+            body["x"] = x
+        if y is not None:
+            body["y"] = y
+        return self._request("POST", "/director/mouse/right-click", body)
+
+    def mouse_drag(self, start_x: int, start_y: int, end_x: int, end_y: int, *, button: int = 1, duration: float | None = None) -> dict[str, Any]:
+        """POST /director/mouse/drag — drag from one point to another."""
+        body: dict[str, Any] = {"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y, "button": button}
+        if duration is not None:
+            body["duration"] = duration
+        return self._request("POST", "/director/mouse/drag", body)
+
+    def mouse_scroll(self, clicks: int, *, x: int | None = None, y: int | None = None) -> dict[str, Any]:
+        """POST /director/mouse/scroll — scroll the mouse wheel."""
+        body: dict[str, Any] = {"clicks": clicks}
+        if x is not None:
+            body["x"] = x
+        if y is not None:
+            body["y"] = y
+        return self._request("POST", "/director/mouse/scroll", body)
+
+    def mouse_position(self) -> dict[str, Any]:
+        """GET /director/mouse/position — get cursor position."""
+        return self._request("GET", "/director/mouse/position")
+
+    # ------------------------------------------------------------------
+    # Director — Keyboard
+    # ------------------------------------------------------------------
+
+    def keyboard_type(self, text: str, *, wpm: float | None = None) -> dict[str, Any]:
+        """POST /director/keyboard/type — type text with human-like rhythm."""
+        body: dict[str, Any] = {"text": text}
+        if wpm is not None:
+            body["wpm"] = wpm
+        return self._request("POST", "/director/keyboard/type", body)
+
+    def keyboard_press(self, *keys: str) -> dict[str, Any]:
+        """POST /director/keyboard/press — press key(s)."""
+        return self._request("POST", "/director/keyboard/press", {"keys": list(keys)})
+
+    def keyboard_hold(self, key: str) -> dict[str, Any]:
+        """POST /director/keyboard/hold — hold a key down."""
+        return self._request("POST", "/director/keyboard/hold", {"key": key})
+
+    def keyboard_release(self, key: str) -> dict[str, Any]:
+        """POST /director/keyboard/release — release a held key."""
+        return self._request("POST", "/director/keyboard/release", {"key": key})
+
+    # ------------------------------------------------------------------
+    # Director — Window
+    # ------------------------------------------------------------------
+
+    def window_find(self, name: str | None = None, *, class_name: str | None = None, timeout: float = 10.0) -> dict[str, Any]:
+        """POST /director/window/find — find a window by name or WM_CLASS."""
+        body: dict[str, Any] = {"timeout": timeout}
+        if name is not None:
+            body["name"] = name
+        if class_name is not None:
+            body["class"] = class_name
+        return self._request("POST", "/director/window/find", body)
+
+    def window_focus(self, window_id: str) -> dict[str, Any]:
+        """POST /director/window/{id}/focus — focus a window."""
+        return self._request("POST", f"/director/window/{window_id}/focus")
+
+    def window_move(self, window_id: str, x: int, y: int) -> dict[str, Any]:
+        """POST /director/window/{id}/move — move a window."""
+        return self._request("POST", f"/director/window/{window_id}/move", {"x": x, "y": y})
+
+    def window_resize(self, window_id: str, width: int, height: int) -> dict[str, Any]:
+        """POST /director/window/{id}/resize — resize a window."""
+        return self._request("POST", f"/director/window/{window_id}/resize", {"width": width, "height": height})
+
+    def window_minimize(self, window_id: str) -> dict[str, Any]:
+        """POST /director/window/{id}/minimize — minimize a window."""
+        return self._request("POST", f"/director/window/{window_id}/minimize")
+
+    def window_geometry(self, window_id: str) -> dict[str, Any]:
+        """GET /director/window/{id}/geometry — get window geometry."""
+        return self._request("GET", f"/director/window/{window_id}/geometry")
+
+    def window_tile(self, window_ids: list[str], layout: str = "side-by-side", *, bounds: tuple[int, int, int, int] | None = None) -> dict[str, Any]:
+        """POST /director/window/tile — tile windows."""
+        body: dict[str, Any] = {"window_ids": window_ids, "layout": layout}
+        if bounds is not None:
+            body["bounds"] = list(bounds)
+        return self._request("POST", "/director/window/tile", body)
+
+    # ------------------------------------------------------------------
     # Convenience helpers
     # ------------------------------------------------------------------
 
