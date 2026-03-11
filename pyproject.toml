@@ -26,7 +26,7 @@ thea = "thea.cli:main"
 dev = ["pytest"]
 
 [project.urls]
-Homepage = "https://github.com/BarkingIguana/thea"
+Homepage = "https://github.com/BarkingIguana/thea-recorder"
 
 [tool.setuptools.packages.find]
 where = ["src"]
