@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0] — 2026-03-11
+
+### Features
+- feat: add [director] optional dependency and Recorder.director property
+
+### Other
+- Merge pull request #5 from barkingiguana/feat/director-optional-dep
+- Merge pull request #4 from barkingiguana/infra/director-release-and-ci-fix
+- infra: add thea-director to CI and release pipeline, fix e2e-apps exclusion
+
+
 ## [0.7.0] — 2026-03-11
 
 ### Features
@@ -12,4 +23,3 @@
 - test: add Docker-based e2e tests for Selenium, xterm, Gnumeric, and dogfood
 - docs: add comprehensive guide on how X11 recording works
 - infra: skip SDK publish when unchanged, generate categorised changelogs
-
