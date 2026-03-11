@@ -1,0 +1,16 @@
+# E2E tests for recording different application types.
+#
+# Everything runs in ONE container: Thea + Xvfb + the application being recorded.
+# This is intentional — Thea records a local virtual display, so the
+# application being recorded must be co-located.
+#
+# Usage: docker compose up --build --abort-on-container-exit
+
+services:
+  test:
+    build:
+      context: ../..
+      dockerfile: tests/e2e-apps/Dockerfile
+    shm_size: 2g
+    volumes:
+      - ./output:/app/test-output
