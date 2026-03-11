@@ -567,3 +567,358 @@ def multi(instances, base_port, base_display, output_dir, default_display_size, 
             proc.wait()
     except KeyboardInterrupt:
         _stop_all()
+
+
+# ── Director: Mouse commands ─────────────────────────────────────────────
+
+@main.command("mouse-move")
+@click.option("--x", required=True, type=int, help="Target X coordinate.")
+@click.option("--y", required=True, type=int, help="Target Y coordinate.")
+@click.option("--duration", default=None, type=float, help="Movement duration in seconds.")
+@click.option("--target-width", default=None, type=int, help="Target element width for Fitts's Law.")
+@click.pass_context
+def mouse_move(ctx, x, y, duration, target_width):
+    """Move the mouse cursor to (x, y) with human-like motion."""
+    server = _server_url(ctx)
+    body = {"x": x, "y": y}
+    if duration is not None:
+        body["duration"] = duration
+    if target_width is not None:
+        body["target_width"] = target_width
+    try:
+        status, data = _request(f"{server}/director/mouse/move", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("mouse-click")
+@click.option("--x", default=None, type=int, help="X coordinate (omit to click in place).")
+@click.option("--y", default=None, type=int, help="Y coordinate (omit to click in place).")
+@click.option("--button", default=1, type=int, help="Mouse button (1=left, 2=middle, 3=right).")
+@click.option("--duration", default=None, type=float, help="Movement duration in seconds.")
+@click.pass_context
+def mouse_click(ctx, x, y, button, duration):
+    """Click the mouse at (x, y) or in place."""
+    server = _server_url(ctx)
+    body = {"button": button}
+    if x is not None:
+        body["x"] = x
+    if y is not None:
+        body["y"] = y
+    if duration is not None:
+        body["duration"] = duration
+    try:
+        status, data = _request(f"{server}/director/mouse/click", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("mouse-double-click")
+@click.option("--x", default=None, type=int, help="X coordinate.")
+@click.option("--y", default=None, type=int, help="Y coordinate.")
+@click.pass_context
+def mouse_double_click(ctx, x, y):
+    """Double-click at (x, y) or in place."""
+    server = _server_url(ctx)
+    body = {}
+    if x is not None:
+        body["x"] = x
+    if y is not None:
+        body["y"] = y
+    try:
+        status, data = _request(f"{server}/director/mouse/double-click", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("mouse-right-click")
+@click.option("--x", default=None, type=int, help="X coordinate.")
+@click.option("--y", default=None, type=int, help="Y coordinate.")
+@click.pass_context
+def mouse_right_click(ctx, x, y):
+    """Right-click at (x, y) or in place."""
+    server = _server_url(ctx)
+    body = {}
+    if x is not None:
+        body["x"] = x
+    if y is not None:
+        body["y"] = y
+    try:
+        status, data = _request(f"{server}/director/mouse/right-click", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("mouse-drag")
+@click.option("--start-x", required=True, type=int, help="Start X.")
+@click.option("--start-y", required=True, type=int, help="Start Y.")
+@click.option("--end-x", required=True, type=int, help="End X.")
+@click.option("--end-y", required=True, type=int, help="End Y.")
+@click.option("--button", default=1, type=int, help="Mouse button.")
+@click.option("--duration", default=None, type=float, help="Drag duration in seconds.")
+@click.pass_context
+def mouse_drag(ctx, start_x, start_y, end_x, end_y, button, duration):
+    """Drag from (start-x, start-y) to (end-x, end-y)."""
+    server = _server_url(ctx)
+    body = {"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y, "button": button}
+    if duration is not None:
+        body["duration"] = duration
+    try:
+        status, data = _request(f"{server}/director/mouse/drag", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("mouse-scroll")
+@click.option("--clicks", required=True, type=int, help="Scroll clicks (positive=up, negative=down).")
+@click.option("--x", default=None, type=int, help="X coordinate.")
+@click.option("--y", default=None, type=int, help="Y coordinate.")
+@click.pass_context
+def mouse_scroll(ctx, clicks, x, y):
+    """Scroll the mouse wheel."""
+    server = _server_url(ctx)
+    body = {"clicks": clicks}
+    if x is not None:
+        body["x"] = x
+    if y is not None:
+        body["y"] = y
+    try:
+        status, data = _request(f"{server}/director/mouse/scroll", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("mouse-position")
+@click.pass_context
+def mouse_position(ctx):
+    """Get the current mouse cursor position."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/director/mouse/position")
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+# ── Director: Keyboard commands ──────────────────────────────────────────
+
+@main.command("keyboard-type")
+@click.argument("text")
+@click.option("--wpm", default=None, type=int, help="Typing speed in words per minute.")
+@click.pass_context
+def keyboard_type(ctx, text, wpm):
+    """Type text with human-like rhythm."""
+    server = _server_url(ctx)
+    body = {"text": text}
+    if wpm is not None:
+        body["wpm"] = wpm
+    try:
+        status, data = _request(f"{server}/director/keyboard/type", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("keyboard-press")
+@click.argument("keys", nargs=-1, required=True)
+@click.pass_context
+def keyboard_press(ctx, keys):
+    """Press one or more keys (e.g. Return, ctrl+a, Delete)."""
+    server = _server_url(ctx)
+    body = {"keys": list(keys)}
+    try:
+        status, data = _request(f"{server}/director/keyboard/press", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("keyboard-hold")
+@click.argument("key")
+@click.pass_context
+def keyboard_hold(ctx, key):
+    """Hold a key down (release with keyboard-release)."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/director/keyboard/hold", method="POST", data={"key": key})
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("keyboard-release")
+@click.argument("key")
+@click.pass_context
+def keyboard_release(ctx, key):
+    """Release a held key."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/director/keyboard/release", method="POST", data={"key": key})
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+# ── Director: Window commands ────────────────────────────────────────────
+
+@main.command("window-find")
+@click.option("--name", default=None, help="Window name/title substring.")
+@click.option("--class", "window_class", default=None, help="Window class.")
+@click.option("--timeout", default=10.0, type=float, help="Search timeout in seconds.")
+@click.pass_context
+def window_find(ctx, name, window_class, timeout):
+    """Find a window by name or class."""
+    server = _server_url(ctx)
+    body = {"timeout": timeout}
+    if name is not None:
+        body["name"] = name
+    elif window_class is not None:
+        body["class"] = window_class
+    else:
+        click.echo("Error: --name or --class is required", err=True)
+        sys.exit(1)
+    try:
+        status, data = _request(f"{server}/director/window/find", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("window-focus")
+@click.argument("window_id")
+@click.pass_context
+def window_focus(ctx, window_id):
+    """Focus a window by ID."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/director/window/{window_id}/focus", method="POST")
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("window-move")
+@click.argument("window_id")
+@click.option("--x", required=True, type=int, help="X position.")
+@click.option("--y", required=True, type=int, help="Y position.")
+@click.pass_context
+def window_move(ctx, window_id, x, y):
+    """Move a window to (x, y)."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/director/window/{window_id}/move", method="POST", data={"x": x, "y": y})
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("window-resize")
+@click.argument("window_id")
+@click.option("--width", required=True, type=int, help="Width in pixels.")
+@click.option("--height", required=True, type=int, help="Height in pixels.")
+@click.pass_context
+def window_resize(ctx, window_id, width, height):
+    """Resize a window."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/director/window/{window_id}/resize", method="POST", data={"width": width, "height": height})
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("window-minimize")
+@click.argument("window_id")
+@click.pass_context
+def window_minimize(ctx, window_id):
+    """Minimize a window."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/director/window/{window_id}/minimize", method="POST")
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("window-geometry")
+@click.argument("window_id")
+@click.pass_context
+def window_geometry(ctx, window_id):
+    """Get window position and size."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/director/window/{window_id}/geometry")
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("window-tile")
+@click.option("--ids", required=True, help="Comma-separated window IDs.")
+@click.option("--layout", default="side-by-side", type=click.Choice(["side-by-side", "stacked", "grid"]),
+              help="Tile layout.")
+@click.pass_context
+def window_tile(ctx, ids, layout):
+    """Tile multiple windows in the display."""
+    server = _server_url(ctx)
+    window_ids = [i.strip() for i in ids.split(",") if i.strip()]
+    try:
+        status, data = _request(f"{server}/director/window/tile", method="POST",
+                                data={"window_ids": window_ids, "layout": layout})
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])

@@ -681,6 +681,372 @@ def create_app(
     # Expose for testing
     app._composer = _composer
 
+    # ── Director endpoints ─────────────────────────────────────────────────
+
+    def _impl_director_mouse_move(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        x = data.get("x")
+        y = data.get("y")
+        if x is None or y is None:
+            return jsonify({"error": "fields 'x' and 'y' are required"}), 400
+        duration = data.get("duration")
+        target_width = data.get("target_width")
+        with sess_lock:
+            rec.director.mouse.move_to(int(x), int(y), duration=duration, target_width=target_width)
+        return jsonify({"status": "ok", "x": int(x), "y": int(y)}), 200
+
+    def _impl_director_mouse_click(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        x = data.get("x")
+        y = data.get("y")
+        button = data.get("button", 1)
+        duration = data.get("duration")
+        with sess_lock:
+            rec.director.mouse.click(
+                int(x) if x is not None else None,
+                int(y) if y is not None else None,
+                button=int(button),
+                duration=duration,
+            )
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_mouse_double_click(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        x = data.get("x")
+        y = data.get("y")
+        duration = data.get("duration")
+        with sess_lock:
+            rec.director.mouse.double_click(
+                int(x) if x is not None else None,
+                int(y) if y is not None else None,
+                duration=duration,
+            )
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_mouse_right_click(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        x = data.get("x")
+        y = data.get("y")
+        duration = data.get("duration")
+        with sess_lock:
+            rec.director.mouse.right_click(
+                int(x) if x is not None else None,
+                int(y) if y is not None else None,
+                duration=duration,
+            )
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_mouse_drag(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        for field in ("start_x", "start_y", "end_x", "end_y"):
+            if data.get(field) is None:
+                return jsonify({"error": f"field '{field}' is required"}), 400
+        button = data.get("button", 1)
+        duration = data.get("duration")
+        with sess_lock:
+            rec.director.mouse.drag(
+                int(data["start_x"]), int(data["start_y"]),
+                int(data["end_x"]), int(data["end_y"]),
+                button=int(button), duration=duration,
+            )
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_mouse_scroll(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        clicks = data.get("clicks")
+        if clicks is None:
+            return jsonify({"error": "field 'clicks' is required"}), 400
+        x = data.get("x")
+        y = data.get("y")
+        with sess_lock:
+            rec.director.mouse.scroll(
+                int(clicks),
+                x=int(x) if x is not None else None,
+                y=int(y) if y is not None else None,
+            )
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_mouse_position(rec, sess_lock):
+        with sess_lock:
+            x, y = rec.director.mouse.position()
+        return jsonify({"x": x, "y": y}), 200
+
+    def _impl_director_keyboard_type(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        text = data.get("text")
+        if text is None:
+            return jsonify({"error": "field 'text' is required"}), 400
+        wpm = data.get("wpm")
+        with sess_lock:
+            rec.director.keyboard.type(str(text), wpm=wpm)
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_keyboard_press(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        keys = data.get("keys")
+        if not keys or not isinstance(keys, list):
+            return jsonify({"error": "field 'keys' must be a non-empty list of key names"}), 400
+        with sess_lock:
+            rec.director.keyboard.press(*keys)
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_keyboard_hold(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        key = data.get("key")
+        if not key:
+            return jsonify({"error": "field 'key' is required"}), 400
+        with sess_lock:
+            rec.director.keyboard.hold(str(key))
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_keyboard_release(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        key = data.get("key")
+        if not key:
+            return jsonify({"error": "field 'key' is required"}), 400
+        with sess_lock:
+            rec.director.keyboard.release(str(key))
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_window_find(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        name = data.get("name")
+        class_name = data.get("class")
+        if not name and not class_name:
+            return jsonify({"error": "field 'name' or 'class' is required"}), 400
+        timeout = data.get("timeout", 10.0)
+        with sess_lock:
+            try:
+                if class_name:
+                    win = rec.director.window_by_class(str(class_name), timeout=float(timeout))
+                else:
+                    win = rec.director.window(str(name), timeout=float(timeout))
+            except RuntimeError as e:
+                return jsonify({"error": str(e)}), 404
+        return jsonify({"window_id": win.id}), 200
+
+    def _impl_director_window_focus(rec, sess_lock, window_id):
+        from .director.window import Window
+        with sess_lock:
+            Window(window_id, rec.director.env).focus()
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_window_move(rec, sess_lock, window_id):
+        data = request.get_json(silent=True) or {}
+        x = data.get("x")
+        y = data.get("y")
+        if x is None or y is None:
+            return jsonify({"error": "fields 'x' and 'y' are required"}), 400
+        from .director.window import Window
+        with sess_lock:
+            Window(window_id, rec.director.env).move(int(x), int(y))
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_window_resize(rec, sess_lock, window_id):
+        data = request.get_json(silent=True) or {}
+        width = data.get("width")
+        height = data.get("height")
+        if width is None or height is None:
+            return jsonify({"error": "fields 'width' and 'height' are required"}), 400
+        from .director.window import Window
+        with sess_lock:
+            Window(window_id, rec.director.env).resize(int(width), int(height))
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_window_minimize(rec, sess_lock, window_id):
+        from .director.window import Window
+        with sess_lock:
+            Window(window_id, rec.director.env).minimize()
+        return jsonify({"status": "ok"}), 200
+
+    def _impl_director_window_geometry(rec, sess_lock, window_id):
+        from .director.window import Window
+        with sess_lock:
+            x, y, w, h = Window(window_id, rec.director.env).geometry
+        return jsonify({"x": x, "y": y, "width": w, "height": h}), 200
+
+    def _impl_director_window_tile(rec, sess_lock):
+        data = request.get_json(silent=True) or {}
+        window_ids = data.get("window_ids")
+        if not window_ids or not isinstance(window_ids, list):
+            return jsonify({"error": "field 'window_ids' must be a non-empty list"}), 400
+        layout = data.get("layout", "side-by-side")
+        bounds = data.get("bounds")
+        from .director.window import Window, tile as tile_windows
+        with sess_lock:
+            windows = [Window(wid, rec.director.env) for wid in window_ids]
+            tile_windows(
+                windows, layout,
+                bounds=tuple(bounds) if bounds else None,
+            )
+        return jsonify({"status": "ok"}), 200
+
+    # -- Director: default session routes --
+
+    @app.route("/director/mouse/move", methods=["POST"])
+    def director_mouse_move():
+        return _impl_director_mouse_move(recorder, lock)
+
+    @app.route("/director/mouse/click", methods=["POST"])
+    def director_mouse_click():
+        return _impl_director_mouse_click(recorder, lock)
+
+    @app.route("/director/mouse/double-click", methods=["POST"])
+    def director_mouse_double_click():
+        return _impl_director_mouse_double_click(recorder, lock)
+
+    @app.route("/director/mouse/right-click", methods=["POST"])
+    def director_mouse_right_click():
+        return _impl_director_mouse_right_click(recorder, lock)
+
+    @app.route("/director/mouse/drag", methods=["POST"])
+    def director_mouse_drag():
+        return _impl_director_mouse_drag(recorder, lock)
+
+    @app.route("/director/mouse/scroll", methods=["POST"])
+    def director_mouse_scroll():
+        return _impl_director_mouse_scroll(recorder, lock)
+
+    @app.route("/director/mouse/position", methods=["GET"])
+    def director_mouse_position():
+        return _impl_director_mouse_position(recorder, lock)
+
+    @app.route("/director/keyboard/type", methods=["POST"])
+    def director_keyboard_type():
+        return _impl_director_keyboard_type(recorder, lock)
+
+    @app.route("/director/keyboard/press", methods=["POST"])
+    def director_keyboard_press():
+        return _impl_director_keyboard_press(recorder, lock)
+
+    @app.route("/director/keyboard/hold", methods=["POST"])
+    def director_keyboard_hold():
+        return _impl_director_keyboard_hold(recorder, lock)
+
+    @app.route("/director/keyboard/release", methods=["POST"])
+    def director_keyboard_release():
+        return _impl_director_keyboard_release(recorder, lock)
+
+    @app.route("/director/window/find", methods=["POST"])
+    def director_window_find():
+        return _impl_director_window_find(recorder, lock)
+
+    @app.route("/director/window/<window_id>/focus", methods=["POST"])
+    def director_window_focus(window_id):
+        return _impl_director_window_focus(recorder, lock, window_id)
+
+    @app.route("/director/window/<window_id>/move", methods=["POST"])
+    def director_window_move(window_id):
+        return _impl_director_window_move(recorder, lock, window_id)
+
+    @app.route("/director/window/<window_id>/resize", methods=["POST"])
+    def director_window_resize(window_id):
+        return _impl_director_window_resize(recorder, lock, window_id)
+
+    @app.route("/director/window/<window_id>/minimize", methods=["POST"])
+    def director_window_minimize(window_id):
+        return _impl_director_window_minimize(recorder, lock, window_id)
+
+    @app.route("/director/window/<window_id>/geometry", methods=["GET"])
+    def director_window_geometry(window_id):
+        return _impl_director_window_geometry(recorder, lock, window_id)
+
+    @app.route("/director/window/tile", methods=["POST"])
+    def director_window_tile():
+        return _impl_director_window_tile(recorder, lock)
+
+    # -- Director: session-scoped routes --
+
+    @app.route("/sessions/<session_name>/director/mouse/move", methods=["POST"])
+    def sess_director_mouse_move(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_mouse_move(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/mouse/click", methods=["POST"])
+    def sess_director_mouse_click(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_mouse_click(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/mouse/double-click", methods=["POST"])
+    def sess_director_mouse_double_click(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_mouse_double_click(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/mouse/right-click", methods=["POST"])
+    def sess_director_mouse_right_click(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_mouse_right_click(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/mouse/drag", methods=["POST"])
+    def sess_director_mouse_drag(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_mouse_drag(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/mouse/scroll", methods=["POST"])
+    def sess_director_mouse_scroll(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_mouse_scroll(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/mouse/position", methods=["GET"])
+    def sess_director_mouse_position(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_mouse_position(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/keyboard/type", methods=["POST"])
+    def sess_director_keyboard_type(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_keyboard_type(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/keyboard/press", methods=["POST"])
+    def sess_director_keyboard_press(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_keyboard_press(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/keyboard/hold", methods=["POST"])
+    def sess_director_keyboard_hold(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_keyboard_hold(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/keyboard/release", methods=["POST"])
+    def sess_director_keyboard_release(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_keyboard_release(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/window/find", methods=["POST"])
+    def sess_director_window_find(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_window_find(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/director/window/<window_id>/focus", methods=["POST"])
+    def sess_director_window_focus(session_name, window_id):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_window_focus(sess["recorder"], sess["lock"], window_id)
+
+    @app.route("/sessions/<session_name>/director/window/<window_id>/move", methods=["POST"])
+    def sess_director_window_move(session_name, window_id):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_window_move(sess["recorder"], sess["lock"], window_id)
+
+    @app.route("/sessions/<session_name>/director/window/<window_id>/resize", methods=["POST"])
+    def sess_director_window_resize(session_name, window_id):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_window_resize(sess["recorder"], sess["lock"], window_id)
+
+    @app.route("/sessions/<session_name>/director/window/<window_id>/minimize", methods=["POST"])
+    def sess_director_window_minimize(session_name, window_id):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_window_minimize(sess["recorder"], sess["lock"], window_id)
+
+    @app.route("/sessions/<session_name>/director/window/<window_id>/geometry", methods=["GET"])
+    def sess_director_window_geometry(session_name, window_id):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_window_geometry(sess["recorder"], sess["lock"], window_id)
+
+    @app.route("/sessions/<session_name>/director/window/tile", methods=["POST"])
+    def sess_director_window_tile(session_name):
+        sess, err = _session_or_404(session_name)
+        return err if err else _impl_director_window_tile(sess["recorder"], sess["lock"])
+
     # -- Graceful shutdown -------------------------------------------------
 
     def _shutdown_handler(signum, frame):
