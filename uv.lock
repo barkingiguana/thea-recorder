@@ -223,24 +223,24 @@ wheels = [
 
 [[package]]
 name = "thea-recorder"
-version = "0.4.0"
+version = "0.6.0"
 source = { editable = "." }
+dependencies = [
+    { name = "click" },
+]
 
 [package.optional-dependencies]
 dev = [
-    { name = "click" },
     { name = "flask" },
     { name = "pytest" },
 ]
 server = [
-    { name = "click" },
     { name = "flask" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "click", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "click", marker = "extra == 'server'", specifier = ">=8.0" },
+    { name = "click", specifier = ">=8.0" },
     { name = "flask", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "flask", marker = "extra == 'server'", specifier = ">=3.0" },
     { name = "pytest", marker = "extra == 'dev'" },
