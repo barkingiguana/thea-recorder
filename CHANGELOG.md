@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.1] — 2026-03-11
+
+### Fixes
+- fix: correct GitHub repo URLs in pyproject.toml and marketing site
+
+### Other
+- Merge pull request #15 from barkingiguana/fix/triage-issues-9-14
+- Merge pull request #8 from barkingiguana/simplify/collapse-extras
+- simplify: collapse all extras into base package
+
+
 ## [0.9.0] — 2026-03-11
 
 ### Features
