@@ -2,7 +2,7 @@
 
 import pytest
 
-from thea_director.rhythm import (
+from thea.director.rhythm import (
     RhythmConfig,
     base_delay,
     generate_delays,

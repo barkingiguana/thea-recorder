@@ -16,11 +16,6 @@ echo "$VER" > "$ROOT/VERSION"
 # Python main package
 sed -i.bak "s/^version = \".*\"/version = \"$VER\"/" "$ROOT/pyproject.toml" && rm -f "$ROOT/pyproject.toml.bak"
 
-# Director package
-if [ -f "$ROOT/director/pyproject.toml" ]; then
-  sed -i.bak "s/^version = \".*\"/version = \"$VER\"/" "$ROOT/director/pyproject.toml" && rm -f "$ROOT/director/pyproject.toml.bak"
-fi
-
 # Python SDK
 sed -i.bak "s/^version = \".*\"/version = \"$VER\"/" "$ROOT/sdks/python/pyproject.toml" && rm -f "$ROOT/sdks/python/pyproject.toml.bak"
 

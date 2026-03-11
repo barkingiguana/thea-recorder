@@ -1,4 +1,4 @@
-"""Selenium WebDriver bridge for thea-director.
+"""Selenium WebDriver bridge for the Thea Director.
 
 Combines Selenium's element-finding intelligence with the Director's
 human-like physical interaction.  The result: Selenium locates elements
@@ -8,8 +8,8 @@ motion and timing so the recording looks like a real user.
 Usage::
 
     from selenium import webdriver
-    from thea_director import Director
-    from thea_director.bridges.selenium import HumanDriver
+    from thea.director import Director
+    from thea.director.bridges.selenium import HumanDriver
 
     director = Director(":99")
     driver = webdriver.Chrome(options=options)
@@ -19,7 +19,7 @@ Usage::
     human.find_element(By.ID, "email").type("user@example.com")
     human.find_element(By.ID, "submit").click()
 
-Requires the ``selenium`` package: ``pip install thea-director[selenium]``
+Requires the ``selenium`` package: ``pip install thea-recorder[selenium]``
 """
 
 from __future__ import annotations

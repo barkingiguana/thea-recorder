@@ -1,4 +1,4 @@
-"""thea-director: human-like display interaction for Thea recordings.
+"""Human-like display interaction for Thea recordings.
 
 The Director orchestrates keyboard, mouse, and window interaction on
 an X11 display.  It produces input that looks like a real human is
@@ -9,7 +9,7 @@ Thea records the display.  The Director directs the action on it.
 
 Quick start::
 
-    from thea_director import Director
+    from thea.director import Director
 
     director = Director(":99")  # connect to display :99
 

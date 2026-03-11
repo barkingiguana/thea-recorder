@@ -24,14 +24,11 @@ thea = "thea.cli:main"
 
 [project.optional-dependencies]
 server = ["flask>=3.0"]
-director = ["thea-director"]
-dev = ["pytest", "flask>=3.0", "thea-director"]
+selenium = ["selenium>=4.0"]
+dev = ["pytest", "flask>=3.0"]
 
 [project.urls]
 Homepage = "https://github.com/BarkingIguana/thea"
-
-[tool.uv.sources]
-thea-director = { path = "director/", editable = true }
 
 [tool.setuptools.packages.find]
 where = ["src"]

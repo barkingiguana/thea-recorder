@@ -4,6 +4,9 @@ from .client import CompositionHelper, RecorderClient, RecorderError, RecordingR
 # Layout (stdlib-only, always available)
 from .layout import Region, validate_regions, generate_testcard
 
+# Director (always available — uses xdotool at runtime)
+from .director import Director, MotionConfig, RhythmConfig
+
 # Server components (require flask/click — installed via `pip install thea-recorder[server]`)
 try:
     from .recorder import Recorder, PANEL_HEIGHT, LINE_HEIGHT
@@ -17,6 +20,8 @@ __all__ = [
     "RecorderClient", "RecorderError", "RecordingResult", "CompositionHelper",
     # Layout
     "Region", "validate_regions", "generate_testcard",
+    # Director (always available)
+    "Director", "MotionConfig", "RhythmConfig",
     # Server (available when [server] extra is installed)
     "Recorder", "PANEL_HEIGHT", "LINE_HEIGHT",
     "generate_report",

@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock, PropertyMock
 
 import pytest
 
-from thea_director.bridges.selenium import HumanElement, HumanDriver
+from thea.director.bridges.selenium import HumanElement, HumanDriver
 
 
 def _mock_element(rect=None):
@@ -57,7 +57,7 @@ class TestHumanElementClick:
 
 
 class TestHumanElementType:
-    @patch("thea_director.bridges.selenium.time.sleep")
+    @patch("thea.director.bridges.selenium.time.sleep")
     def test_type_clicks_first(self, mock_sleep):
         director = _mock_director()
         he = HumanElement(_mock_element(), director)
@@ -65,14 +65,14 @@ class TestHumanElementType:
         director.mouse.click.assert_called_once()
         director.keyboard.type.assert_called_once_with("hello", wpm=None)
 
-    @patch("thea_director.bridges.selenium.time.sleep")
+    @patch("thea.director.bridges.selenium.time.sleep")
     def test_type_with_wpm(self, mock_sleep):
         director = _mock_director()
         he = HumanElement(_mock_element(), director)
         he.type("text", wpm=120)
         director.keyboard.type.assert_called_once_with("text", wpm=120)
 
-    @patch("thea_director.bridges.selenium.time.sleep")
+    @patch("thea.director.bridges.selenium.time.sleep")
     def test_type_with_clear(self, mock_sleep):
         director = _mock_director()
         he = HumanElement(_mock_element(), director)
