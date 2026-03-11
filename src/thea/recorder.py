@@ -103,6 +103,7 @@ class Recorder:
         self._recording_start = None
         self._allocated_bar_height = PANEL_HEIGHT
         self._panels = {}  # name -> {"title": str, "path": str, "width": int|None, "height": int|None}
+        self._launched_apps = []  # Popen instances launched via launch_app()
 
     # -- Display -----------------------------------------------------------
 
@@ -110,6 +111,16 @@ class Recorder:
     def display_string(self) -> str:
         """X11 display identifier, e.g. ``:99``."""
         return f":{self._display}"
+
+    @property
+    def display_env(self) -> dict:
+        """Environment dict with ``DISPLAY`` set to this recorder's Xvfb.
+
+        Use this when launching applications on the recorder's display::
+
+            subprocess.Popen(["chromium"], env=rec.display_env)
+        """
+        return {**os.environ, "DISPLAY": self.display_string}
 
     def start_display(self, display_size: str = None):
         """Launch Xvfb on the configured display number.
@@ -158,6 +169,36 @@ class Recorder:
                 self._xvfb_proc.kill()
             self._xvfb_proc = None
             logger.debug("Xvfb stopped")
+
+    # -- Application launching ---------------------------------------------
+
+    def launch_app(self, cmd: list[str], *, env: dict = None, **kwargs) -> subprocess.Popen:
+        """Launch an application on the recorder's Xvfb display.
+
+        The process is tracked and will be terminated automatically when
+        :meth:`cleanup` is called.  ``DISPLAY`` is set to this recorder's
+        display — you do not need to set it yourself.
+
+        Thea, Xvfb, and the launched application **must** all run on the same
+        machine.  This method launches a local subprocess; it is not a remote
+        execution mechanism.
+
+        Args:
+            cmd: Command and arguments, e.g. ``["chromium", "--no-sandbox"]``.
+            env: Extra environment variables.  These are merged on top of
+                :attr:`display_env`.  If *None*, only ``DISPLAY`` is added.
+            **kwargs: Passed through to :class:`subprocess.Popen`.
+
+        Returns:
+            The :class:`subprocess.Popen` instance.
+        """
+        merged_env = self.display_env
+        if env:
+            merged_env.update(env)
+        proc = subprocess.Popen(cmd, env=merged_env, **kwargs)
+        self._launched_apps.append(proc)
+        logger.debug("Launched app (pid %d): %s", proc.pid, cmd)
+        return proc
 
     # -- Panels ------------------------------------------------------------
 
@@ -375,7 +416,7 @@ class Recorder:
 
             # Title
             if panel["title"]:
-                title_escaped = panel["title"].replace(":", "\\:")
+                title_escaped = panel["title"].replace("'", "\u2019").replace(":", "\\:")
                 parts.append(
                     f"drawtext=text='{title_escaped}'"
                     f":fontfile={font_bold}:fontsize=14:fontcolor=0x58a6ff"
@@ -503,8 +544,16 @@ class Recorder:
     # -- Lifecycle ---------------------------------------------------------
 
     def cleanup(self):
-        """Stop recording and display, remove panel temp files."""
+        """Stop recording and display, terminate launched apps, remove panel temp files."""
         self.stop_recording()
+        for proc in self._launched_apps:
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+        self._launched_apps.clear()
         self.stop_display()
         for panel in self._panels.values():
             self._remove_panel_files(panel)

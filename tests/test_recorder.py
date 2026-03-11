@@ -1,4 +1,5 @@
 import os
+import subprocess
 from unittest.mock import Mock, patch
 
 import pytest
@@ -147,6 +148,111 @@ class TestStartDisplay:
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["env"]["DISPLAY"] == ":77"
+
+
+class TestDisplayEnv:
+    def test_display_env_contains_display(self):
+        r = Recorder(display=42)
+        env = r.display_env
+        assert env["DISPLAY"] == ":42"
+
+    def test_display_env_inherits_os_environ(self):
+        r = Recorder()
+        env = r.display_env
+        assert "PATH" in env
+
+    def test_display_env_overrides_existing_display(self):
+        r = Recorder(display=7)
+        with patch.dict(os.environ, {"DISPLAY": ":0"}):
+            env = r.display_env
+            assert env["DISPLAY"] == ":7"
+
+
+class TestLaunchApp:
+    @patch("thea.recorder.subprocess.Popen")
+    def test_launch_app_sets_display(self, mock_popen):
+        proc = Mock()
+        mock_popen.return_value = proc
+        r = Recorder(display=42)
+        result = r.launch_app(["echo", "hello"])
+
+        call_kwargs = mock_popen.call_args
+        assert call_kwargs[1]["env"]["DISPLAY"] == ":42"
+        assert result is proc
+
+    @patch("thea.recorder.subprocess.Popen")
+    def test_launch_app_merges_extra_env(self, mock_popen):
+        proc = Mock()
+        mock_popen.return_value = proc
+        r = Recorder(display=42)
+        r.launch_app(["my-app"], env={"MY_VAR": "hello"})
+
+        call_kwargs = mock_popen.call_args
+        assert call_kwargs[1]["env"]["MY_VAR"] == "hello"
+        assert call_kwargs[1]["env"]["DISPLAY"] == ":42"
+
+    @patch("thea.recorder.subprocess.Popen")
+    def test_launch_app_passes_kwargs(self, mock_popen):
+        proc = Mock()
+        mock_popen.return_value = proc
+        r = Recorder(display=42)
+        r.launch_app(["my-app"], stdout=subprocess.DEVNULL)
+
+        call_kwargs = mock_popen.call_args
+        assert call_kwargs[1]["stdout"] == subprocess.DEVNULL
+
+    @patch("thea.recorder.subprocess.Popen")
+    def test_launch_app_tracked_for_cleanup(self, mock_popen):
+        proc = Mock()
+        proc.poll.return_value = None
+        mock_popen.return_value = proc
+        r = Recorder(display=42)
+        r.launch_app(["my-app"])
+
+        assert len(r._launched_apps) == 1
+        r.cleanup()
+        proc.terminate.assert_called_once()
+
+    @patch("thea.recorder.subprocess.Popen")
+    def test_cleanup_skips_already_exited_apps(self, mock_popen):
+        proc = Mock()
+        proc.poll.return_value = 0  # already exited
+        mock_popen.return_value = proc
+        r = Recorder(display=42)
+        r.launch_app(["my-app"])
+
+        r.cleanup()
+        proc.terminate.assert_not_called()
+
+    @patch("thea.recorder.subprocess.Popen")
+    def test_cleanup_clears_launched_apps(self, mock_popen):
+        proc = Mock()
+        proc.poll.return_value = 0
+        mock_popen.return_value = proc
+        r = Recorder(display=42)
+        r.launch_app(["app1"])
+        r.launch_app(["app2"])
+
+        assert len(r._launched_apps) == 2
+        r.cleanup()
+        assert len(r._launched_apps) == 0
+
+    @patch("thea.recorder.subprocess.Popen")
+    def test_multiple_apps_tracked(self, mock_popen):
+        procs = [Mock(), Mock(), Mock()]
+        for p in procs:
+            p.poll.return_value = None
+        mock_popen.side_effect = procs
+        r = Recorder(display=42)
+
+        r.launch_app(["app1"])
+        r.launch_app(["app2"])
+        r.launch_app(["app3"])
+
+        assert len(r._launched_apps) == 3
+        r.cleanup()
+        for p in procs:
+            p.terminate.assert_called_once()
 
 
 class TestPanels:
