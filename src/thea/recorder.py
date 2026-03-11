@@ -104,6 +104,7 @@ class Recorder:
         self._allocated_bar_height = PANEL_HEIGHT
         self._panels = {}  # name -> {"title": str, "path": str, "width": int|None, "height": int|None}
         self._launched_apps = []  # Popen instances launched via launch_app()
+        self._director = None  # Lazy-initialised Director instance
 
     # -- Display -----------------------------------------------------------
 
@@ -169,6 +170,23 @@ class Recorder:
                 self._xvfb_proc.kill()
             self._xvfb_proc = None
             logger.debug("Xvfb stopped")
+
+    # -- Director ----------------------------------------------------------
+
+    @property
+    def director(self):
+        """A :class:`thea_director.Director` for human-like interaction on this display.
+
+        Requires ``pip install thea-recorder[director]``.  The Director
+        is created lazily on first access and reused thereafter.
+
+        Raises:
+            ImportError: If thea-director is not installed.
+        """
+        if self._director is None:
+            from thea_director import Director
+            self._director = Director(self.display_env)
+        return self._director
 
     # -- Application launching ---------------------------------------------
 
