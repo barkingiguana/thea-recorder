@@ -19,7 +19,6 @@ jobs:
       next_version: ${{ steps.bump.outputs.next_version }}
       bump_type: ${{ steps.bump.outputs.bump_type }}
       python_changed: ${{ steps.changes.outputs.python }}
-      director_changed: ${{ steps.changes.outputs.director }}
       go_changed: ${{ steps.changes.outputs.go }}
       changelog: ${{ steps.changelog.outputs.text }}
     steps:
@@ -95,15 +94,6 @@ jobs:
           else
             echo "python=false" >> "$GITHUB_OUTPUT"
             echo "Python package unchanged — will skip publish"
-          fi
-
-          # Director package
-          if echo "$CHANGED" | grep -qE '^director/'; then
-            echo "director=true" >> "$GITHUB_OUTPUT"
-            echo "Director package changed"
-          else
-            echo "director=false" >> "$GITHUB_OUTPUT"
-            echo "Director package unchanged — will skip publish"
           fi
 
           # Go SDK
@@ -232,24 +222,6 @@ jobs:
       - uses: astral-sh/setup-uv@v4
       - run: uv build
       - uses: pypa/gh-action-pypi-publish@release/v1
-
-  director:
-    name: Publish Director to PyPI
-    needs: [check, release]
-    if: needs.check.outputs.director_changed == 'true'
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: v${{ needs.release.outputs.version }}
-      - uses: astral-sh/setup-uv@v4
-      - run: cd director && uv build
-      - uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: director/dist/
 
   go:
     name: Publish Go SDK

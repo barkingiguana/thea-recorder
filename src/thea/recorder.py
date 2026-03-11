@@ -175,16 +175,12 @@ class Recorder:
 
     @property
     def director(self):
-        """A :class:`thea_director.Director` for human-like interaction on this display.
+        """A :class:`thea.director.Director` for human-like interaction on this display.
 
-        Requires ``pip install thea-recorder[director]``.  The Director
-        is created lazily on first access and reused thereafter.
-
-        Raises:
-            ImportError: If thea-director is not installed.
+        The Director is created lazily on first access and reused thereafter.
         """
         if self._director is None:
-            from thea_director import Director
+            from .director import Director
             self._director = Director(self.display_env)
         return self._director
 

@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from thea_director.motion import (
+from thea.director.motion import (
     MotionConfig,
     fitts_duration,
     generate_path,

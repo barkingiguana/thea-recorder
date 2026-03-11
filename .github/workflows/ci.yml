@@ -33,14 +33,6 @@ jobs:
       - uses: astral-sh/setup-uv@v4
       - run: uv run --extra dev pytest tests/ -v --ignore=tests/e2e --ignore=tests/e2e-apps
 
-  director:
-    name: Director Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
-      - run: cd director && uv run --extra dev python3 -m pytest tests/ -v
-
   go:
     name: Go SDK Tests
     runs-on: ubuntu-latest
