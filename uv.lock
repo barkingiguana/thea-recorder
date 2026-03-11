@@ -222,8 +222,20 @@ wheels = [
 ]
 
 [[package]]
-name = "thea-recorder"
+name = "thea-director"
 version = "0.6.0"
+source = { editable = "director" }
+
+[package.metadata]
+requires-dist = [
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "selenium", marker = "extra == 'selenium'", specifier = ">=4.0" },
+]
+provides-extras = ["selenium", "dev"]
+
+[[package]]
+name = "thea-recorder"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -233,6 +245,10 @@ dependencies = [
 dev = [
     { name = "flask" },
     { name = "pytest" },
+    { name = "thea-director" },
+]
+director = [
+    { name = "thea-director" },
 ]
 server = [
     { name = "flask" },
@@ -244,8 +260,10 @@ requires-dist = [
     { name = "flask", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "flask", marker = "extra == 'server'", specifier = ">=3.0" },
     { name = "pytest", marker = "extra == 'dev'" },
+    { name = "thea-director", marker = "extra == 'dev'", editable = "director" },
+    { name = "thea-director", marker = "extra == 'director'", editable = "director" },
 ]
-provides-extras = ["server", "dev"]
+provides-extras = ["server", "director", "dev"]
 
 [[package]]
 name = "tomli"

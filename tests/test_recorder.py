@@ -255,6 +255,48 @@ class TestLaunchApp:
             p.terminate.assert_called_once()
 
 
+class TestDirectorProperty:
+    def test_director_raises_without_package(self):
+        r = Recorder(display=42)
+        with patch.dict("sys.modules", {"thea_director": None}):
+            with pytest.raises(ImportError):
+                r.director
+
+    @patch("thea.recorder.subprocess.run")
+    def test_director_returns_director_instance(self, mock_run):
+        mock_run.return_value = Mock(stdout="window id # 0x1", returncode=0)
+        r = Recorder(display=42)
+        try:
+            from thea_director import Director
+        except ImportError:
+            pytest.skip("thea-director not installed")
+        d = r.director
+        assert isinstance(d, Director)
+
+    @patch("thea.recorder.subprocess.run")
+    def test_director_is_cached(self, mock_run):
+        mock_run.return_value = Mock(stdout="window id # 0x1", returncode=0)
+        r = Recorder(display=42)
+        try:
+            from thea_director import Director
+        except ImportError:
+            pytest.skip("thea-director not installed")
+        d1 = r.director
+        d2 = r.director
+        assert d1 is d2
+
+    @patch("thea.recorder.subprocess.run")
+    def test_director_uses_recorder_display(self, mock_run):
+        mock_run.return_value = Mock(stdout="window id # 0x1", returncode=0)
+        r = Recorder(display=77)
+        try:
+            from thea_director import Director
+        except ImportError:
+            pytest.skip("thea-director not installed")
+        d = r.director
+        assert d.env["DISPLAY"] == ":77"
+
+
 class TestPanels:
     def test_add_panel_creates_temp_file(self):
         r = Recorder()
