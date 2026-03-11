@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.9.0] — 2026-03-11
+
+### Features
+- feat: expose Director operations over HTTP API with CLI commands
+
+### Other
+- Merge pull request #7 from barkingiguana/feat/director-api
+- Merge pull request #6 from barkingiguana/refactor/director-as-submodule
+- Merge remote-tracking branch 'origin/main' into refactor/director-as-submodule
+- refactor: fold thea-director into thea-recorder as thea.director submodule
+
+
 ## [0.8.0] — 2026-03-11
 
 ### Features
