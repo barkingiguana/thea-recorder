@@ -7,7 +7,7 @@ name = "thea-recorder"
 version = "0.8.0"
 description = "Record Xvfb virtual displays as MP4 video with live panel overlays and interactive HTML reports."
 requires-python = ">=3.10"
-dependencies = ["click>=8.0"]
+dependencies = ["click>=8.0", "flask>=3.0", "selenium>=4.0"]
 license = {text = "MIT"}
 readme = "README.md"
 keywords = ["testing", "video", "recording", "xvfb", "ffmpeg", "e2e", "behave", "cucumber", "selenium"]
@@ -23,9 +23,7 @@ classifiers = [
 thea = "thea.cli:main"
 
 [project.optional-dependencies]
-server = ["flask>=3.0"]
-selenium = ["selenium>=4.0"]
-dev = ["pytest", "flask>=3.0"]
+dev = ["pytest"]
 
 [project.urls]
 Homepage = "https://github.com/BarkingIguana/thea"

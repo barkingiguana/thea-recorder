@@ -361,7 +361,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Thea
-RUN pip install thea-recorder[server]
+RUN pip install thea-recorder
 
 # Everything runs in this one container:
 # Thea + Xvfb + ffmpeg + your application

@@ -352,33 +352,27 @@ wheels = [
 
 [[package]]
 name = "thea-recorder"
-version = "0.7.0"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "flask" },
+    { name = "selenium" },
 ]
 
 [package.optional-dependencies]
 dev = [
-    { name = "flask" },
     { name = "pytest" },
-]
-selenium = [
-    { name = "selenium" },
-]
-server = [
-    { name = "flask" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.0" },
-    { name = "flask", marker = "extra == 'dev'", specifier = ">=3.0" },
-    { name = "flask", marker = "extra == 'server'", specifier = ">=3.0" },
+    { name = "flask", specifier = ">=3.0" },
     { name = "pytest", marker = "extra == 'dev'" },
-    { name = "selenium", marker = "extra == 'selenium'", specifier = ">=4.0" },
+    { name = "selenium", specifier = ">=4.0" },
 ]
-provides-extras = ["server", "selenium", "dev"]
+provides-extras = ["dev"]
 
 [[package]]
 name = "tomli"
