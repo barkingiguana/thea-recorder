@@ -46,11 +46,7 @@ If it has a window and can run on X11, thea can record it.
 ## Install
 
 ```bash
-# Client only (zero dependencies — for test suites and automation scripts)
 pip install thea-recorder
-
-# Server + CLI (includes Flask and Click)
-pip install thea-recorder[server]
 ```
 
 System dependencies (for the server, in your Docker image or CI runner):
@@ -183,7 +179,7 @@ RUN apt-get update && apt-get install -qyy --no-install-recommends \
     chromium-driver xvfb ffmpeg x11-xserver-utils fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install thea-recorder[server]
+RUN pip install thea-recorder
 EXPOSE 9123
 CMD ["thea", "serve", "--host", "0.0.0.0", "--port", "9123"]
 ```

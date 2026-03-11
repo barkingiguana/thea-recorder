@@ -19,7 +19,7 @@ Usage::
     human.find_element(By.ID, "email").type("user@example.com")
     human.find_element(By.ID, "submit").click()
 
-Requires the ``selenium`` package: ``pip install thea-recorder[selenium]``
+Requires ``pip install thea-recorder`` (selenium is included).
 """
 
 from __future__ import annotations
