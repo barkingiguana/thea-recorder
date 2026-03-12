@@ -1412,6 +1412,7 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
                 <p>
                     Named columns below the viewport with live-updating text.
                     Custom width and height per panel. Smart scrolling keeps the active line visible.
+                    Supports custom bg_color and opacity for transparent or coloured overlays.
                 </p>
             </div>
             <div class="feature-card">
@@ -1468,6 +1469,32 @@ curl <span class="op">-o</span> login_test.mp4 http://localhost:9123/recordings/
                 <p>
                     Built-in Director for realistic mouse movement, natural typing rhythm,
                     and window management. Smooth trajectories, not instant teleportation.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9656;</div>
+                <h4>Live streaming</h4>
+                <p>
+                    Watch displays in real-time via MJPEG streams. Open /display/view in
+                    your browser or embed the stream in any HTML page. Built-in dashboard
+                    at /dashboard shows all sessions at once.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9776;</div>
+                <h4>Event log</h4>
+                <p>
+                    Every action is timestamped. Track display starts, recordings, panel
+                    updates, and more with the per-session event log. Poll /events for
+                    live updates.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9633;</div>
+                <h4>Screenshot capture</h4>
+                <p>
+                    Grab JPEG frames from live displays or extract frames from recorded
+                    videos at any time offset. Perfect for CI thumbnails and test reports.
                 </p>
             </div>
         </div>

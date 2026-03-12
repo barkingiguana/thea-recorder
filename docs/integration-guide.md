@@ -313,3 +313,6 @@ class LoginTest {
 - **Update panels in step hooks** for the best video debugging experience.
 - **Set `--shm-size=2g`** or higher in Docker — Xvfb and some applications need shared memory.
 - **Mount a volume** for the recordings directory so you can access videos after the container exits.
+- **Use `/dashboard` in Docker** — expose port 9123 and open `http://localhost:9123/dashboard` in your browser to monitor all sessions from the host.
+- **Watch tests live** — use `display_stream_url()` or `display_viewer_url()` to stream the virtual display in real-time from your Docker host while tests are running.
+- **Generate CI report thumbnails** — use `recording_screenshot(name, time)` to extract a frame from a finished recording for use as a thumbnail in CI reports.

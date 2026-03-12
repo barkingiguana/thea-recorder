@@ -79,7 +79,7 @@ Every SDK provides:
 |---|---|
 | `start_display()` | Launch Xvfb |
 | `stop_display()` | Stop Xvfb |
-| `add_panel(name, title, width)` | Add overlay panel |
+| `add_panel(name, title, width, bg_color, opacity)` | Add overlay panel (optional background color and opacity) |
 | `update_panel(name, text, focus_line)` | Update panel content |
 | `remove_panel(name)` | Remove panel |
 | `list_panels()` | List all panels |
@@ -90,6 +90,12 @@ Every SDK provides:
 | `list_recordings()` | List available MP4 files |
 | `download_recording(name, path)` | Download MP4 to local file |
 | `recording_info(name)` | Get file metadata |
+| `display_screenshot(quality)` | Capture a JPEG screenshot of the live display |
+| `display_stream_url(fps)` | Get the MJPEG stream URL |
+| `display_viewer_url()` | Get the HTML live viewer URL |
+| `recording_screenshot(name, time, quality)` | Extract a frame from a recorded video |
+| `events(since)` | Get the session event log |
+| `dashboard_url()` | Get the dashboard URL |
 | `health()` | Server health check |
 | `cleanup()` | Full teardown |
 
