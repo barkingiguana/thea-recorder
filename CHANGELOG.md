@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.10.0] — 2026-03-12
+
+### Features
+- feat: add live MJPEG streaming, screenshots, and panel colour/opacity
+
+### Other
+- Merge pull request #18 from barkingiguana/feat/live-streaming-screenshots-panels
+- docs: document display streaming, screenshots, and panel styling
+
+
 ## [0.9.2] — 2026-03-12
 
 ### Fixes
