@@ -38,7 +38,7 @@ def recorder(output_dir):
     # Start a lightweight window manager so that window focus,
     # activation, and resizing work properly with xdotool.
     rec.launch_app(
-        ["openbox", "--config-file", "/dev/null"],
+        ["openbox"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
