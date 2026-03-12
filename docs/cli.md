@@ -56,6 +56,20 @@ thea start-display --display-size 1280x720
 
 # Stop the virtual display
 thea stop-display
+
+# Capture a screenshot of the live display
+thea screenshot -o screenshot.jpg
+thea screenshot -o screenshot.jpg --quality 50
+
+# Get the MJPEG stream URL (for embedding in HTML or opening in a player)
+thea stream-url
+thea stream-url --fps 10
+
+# Get the HTML viewer URL (open in browser for a live view with dark theme)
+thea view-url
+
+# Extract a frame from a saved recording at a time offset
+thea recording-screenshot --name login_test --time 12.5 -o frame.jpg
 ```
 
 ### Panels
@@ -63,6 +77,9 @@ thea stop-display
 ```bash
 # Add a panel
 thea add-panel --name status --title Status --width 120
+
+# Add a panel with custom background colour and transparency
+thea add-panel --name status --title Status --bg-color 1a1a2e --opacity 0.8
 
 # Update panel content
 thea update-panel --name status --text "Running step 3" --focus-line 5
