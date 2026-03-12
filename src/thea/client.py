@@ -204,6 +204,46 @@ class RecorderClient:
         """POST /display/stop — stop the virtual display."""
         return self._request("POST", "/display/stop")
 
+    def display_screenshot(self, *, quality: int = 80) -> bytes:
+        """GET /display/screenshot — capture a JPEG screenshot of the live display.
+
+        Parameters
+        ----------
+        quality:
+            JPEG quality (1-100, default 80).
+
+        Returns
+        -------
+        bytes
+            JPEG image data.
+        """
+        return self._request_raw("GET", f"/display/screenshot?quality={quality}")
+
+    def display_stream_url(self, *, fps: int = 5) -> str:
+        """Return the URL for the live MJPEG stream.
+
+        Parameters
+        ----------
+        fps:
+            Frames per second for the stream (1-15, default 5).
+
+        Returns
+        -------
+        str
+            Full URL to the MJPEG stream endpoint.
+        """
+        return f"{self.base_url}{self._session_prefix}/display/stream?fps={fps}"
+
+    def display_viewer_url(self) -> str:
+        """Return the URL for the HTML live viewer page.
+
+        Returns
+        -------
+        str
+            Full URL to the viewer page.
+        """
+        return f"{self.base_url}{self._session_prefix}/display/view"
+
     # ------------------------------------------------------------------
     # Panels
     # ------------------------------------------------------------------
@@ -214,6 +254,8 @@ class RecorderClient:
         title: str,
         width: int | None = None,
         height: int | None = None,
+        bg_color: str | None = None,
+        opacity: float | None = None,
     ) -> dict[str, Any]:
         """POST /panels — create a new panel.
 
@@ -227,6 +269,12 @@ class RecorderClient:
             Fixed width in pixels (*None* = auto).
         height:
             Panel height in pixels (*None* = use bar height default).
+        bg_color:
+            Background colour as a hex string (e.g. ``"1a1a2e"``).
+            *None* uses the recorder default.
+        opacity:
+            Background opacity from 0.0 (transparent) to 1.0 (opaque).
+            *None* uses the recorder default.
 
         Returns
         -------
@@ -238,6 +286,10 @@ class RecorderClient:
             body["width"] = width
         if height is not None:
             body["height"] = height
+        if bg_color is not None:
+            body["bg_color"] = bg_color
+        if opacity is not None:
+            body["opacity"] = opacity
         return self._request("POST", "/panels", body)
 
     def update_panel(
@@ -308,6 +360,28 @@ class RecorderClient:
     def recording_info(self, name: str) -> dict[str, Any]:
         """GET /recordings/{name}/info — metadata for a recording."""
         return self._request("GET", f"/recordings/{name}/info")
+
+    def recording_screenshot(
+        self, name: str, time_offset: float, *, quality: int = 80
+    ) -> bytes:
+        """GET /recordings/{name}/screenshot?t=...&quality=... — extract a frame.
+
+        Parameters
+        ----------
+        name:
+            Recording name.
+        time_offset:
+            Time offset in seconds into the video.
+        quality:
+            JPEG quality (1-100, default 80).
+
+        Returns
+        -------
+        bytes
+            JPEG image data.
+        """
+        params = f"?t={time_offset:.3f}&quality={quality}"
+        return self._request_raw("GET", f"/recordings/{name}/screenshot{params}")
 
     # ------------------------------------------------------------------
     # Health / cleanup

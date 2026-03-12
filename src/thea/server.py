@@ -138,6 +138,138 @@ def create_app(
             rec.stop_display()
             return jsonify({"status": "stopped"}), 200
 
+    def _impl_display_screenshot(rec, sess_lock):
+        quality = request.args.get("quality", 80, type=int)
+        quality = max(1, min(100, quality))
+        with sess_lock:
+            if rec._xvfb_proc is None:
+                return jsonify({"error": "display not started"}), 409
+        try:
+            data = rec.screenshot(quality=quality)
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        return Response(data, mimetype="image/jpeg")
+
+    def _impl_display_stream(rec, sess_lock):
+        fps = request.args.get("fps", 5, type=int)
+        fps = max(1, min(15, fps))
+        with sess_lock:
+            if rec._xvfb_proc is None:
+                return jsonify({"error": "display not started"}), 409
+
+        def _generate():
+            interval = 1.0 / fps
+            while True:
+                try:
+                    jpeg = rec.screenshot()
+                    yield (
+                        b"--frame\r\n"
+                        b"Content-Type: image/jpeg\r\n"
+                        b"Content-Length: " + str(len(jpeg)).encode() + b"\r\n\r\n"
+                        + jpeg + b"\r\n"
+                    )
+                    time.sleep(interval)
+                except GeneratorExit:
+                    break
+                except Exception:
+                    break
+
+        return Response(
+            _generate(),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+        )
+
+    def _impl_display_view(rec, sess_lock):
+        with sess_lock:
+            display = rec.display_string
+            display_size = rec._display_size
+            recording = rec._ffmpeg_proc is not None
+        # Build the stream URL relative to the current request
+        stream_path = request.path.rsplit("/view", 1)[0] + "/stream"
+        html = f"""\
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thea Live — {display}</title>
+<style>
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #0a0e17; color: #e2e8f0;
+    display: flex; flex-direction: column; align-items: center;
+    min-height: 100vh; padding: 1rem;
+}}
+.header {{
+    display: flex; align-items: center; gap: 1rem;
+    padding: 0.75rem 1.5rem; margin-bottom: 1rem;
+    background: #111827; border: 1px solid #1e2d45;
+    border-radius: 8px; width: fit-content;
+}}
+.header h1 {{ font-size: 1rem; font-weight: 600; }}
+.badge {{
+    padding: 3px 10px; border-radius: 12px;
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; font-family: monospace;
+}}
+.badge.live {{ background: rgba(248, 81, 73, 0.15); color: #f85149; }}
+.badge.idle {{ background: rgba(88, 166, 255, 0.15); color: #58a6ff; }}
+.info {{ font-size: 0.8rem; color: #94a3b8; font-family: monospace; }}
+.stream-container {{
+    border: 1px solid #1e2d45; border-radius: 8px; overflow: hidden;
+    background: #000; max-width: 100%;
+}}
+.stream-container img {{
+    display: block; max-width: 100%; height: auto;
+}}
+.reconnect {{
+    padding: 2rem; text-align: center; color: #64748b;
+    display: none;
+}}
+</style></head><body>
+<div class="header">
+    <h1>Thea Live</h1>
+    <span class="badge {'live' if recording else 'idle'}">
+        {'recording' if recording else 'idle'}
+    </span>
+    <span class="info">{display} &middot; {display_size}</span>
+</div>
+<div class="stream-container">
+    <img id="stream" src="{stream_path}?fps=5" alt="Live display stream">
+    <div class="reconnect" id="reconnect">Reconnecting...</div>
+</div>
+<script>
+var img = document.getElementById('stream');
+var msg = document.getElementById('reconnect');
+img.onerror = function() {{
+    msg.style.display = 'block';
+    img.style.display = 'none';
+    setTimeout(function() {{
+        img.src = '{stream_path}?fps=5&t=' + Date.now();
+        img.style.display = 'block';
+        msg.style.display = 'none';
+    }}, 2000);
+}};
+</script>
+</body></html>"""
+        return Response(html, mimetype="text/html")
+
+    def _impl_recording_screenshot(rec, sess_lock, recording_name):
+        t = request.args.get("t", type=float)
+        if t is None:
+            return jsonify({"error": "query parameter 't' (time in seconds) is required"}), 400
+        quality = request.args.get("quality", 80, type=int)
+        quality = max(1, min(100, quality))
+        # Find the video file
+        safe = re.sub(r"[^\w\-.]", "_", recording_name)[:120]
+        video_path = os.path.join(rec._output_dir, f"{safe}.mp4")
+        try:
+            data = Recorder.screenshot_from_video(video_path, t, quality=quality)
+        except FileNotFoundError:
+            return jsonify({"error": f"recording '{recording_name}' not found"}), 404
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        return Response(data, mimetype="image/jpeg")
+
     def _impl_panels_list(rec, sess_lock):
         with sess_lock:
             panels = [
@@ -164,9 +296,22 @@ def create_app(
                 return jsonify({"error": "field 'height' must be an integer"}), 400
             if height <= 0:
                 return jsonify({"error": "field 'height' must be positive"}), 400
+        bg_color = data.get("bg_color")
+        if bg_color is not None:
+            if not isinstance(bg_color, str) or not re.fullmatch(r"[0-9a-fA-F]{6}", bg_color):
+                return jsonify({"error": "field 'bg_color' must be a 6-digit hex colour string (e.g. 'ff0000')"}), 400
+        opacity = data.get("opacity")
+        if opacity is not None:
+            if not isinstance(opacity, (int, float)):
+                return jsonify({"error": "field 'opacity' must be a number between 0 and 1"}), 400
+            opacity = float(opacity)
+            if opacity < 0.0 or opacity > 1.0:
+                return jsonify({"error": "field 'opacity' must be between 0.0 and 1.0"}), 400
         with sess_lock:
-            warnings = rec.add_panel(name, title=title, width=width, height=height)
-        result = {"name": name, "title": title, "width": width, "height": height}
+            warnings = rec.add_panel(name, title=title, width=width, height=height,
+                                     bg_color=bg_color, opacity=opacity)
+        result = {"name": name, "title": title, "width": width, "height": height,
+                  "bg_color": bg_color, "opacity": opacity}
         if warnings:
             result["warnings"] = warnings
         return jsonify(result), 201
@@ -363,6 +508,27 @@ def create_app(
             return err
         return _impl_display_stop(sess["recorder"], sess["lock"])
 
+    @app.route("/sessions/<session_name>/display/screenshot")
+    def sess_display_screenshot(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_display_screenshot(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/display/stream")
+    def sess_display_stream(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_display_stream(sess["recorder"], sess["lock"])
+
+    @app.route("/sessions/<session_name>/display/view")
+    def sess_display_view(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_display_view(sess["recorder"], sess["lock"])
+
     @app.route("/sessions/<session_name>/panels", methods=["GET"])
     def sess_panels_list(session_name):
         sess, err = _session_or_404(session_name)
@@ -457,6 +623,18 @@ def create_app(
     def display_stop():
         return _impl_display_stop(recorder, lock)
 
+    @app.route("/display/screenshot")
+    def display_screenshot():
+        return _impl_display_screenshot(recorder, lock)
+
+    @app.route("/display/stream")
+    def display_stream():
+        return _impl_display_stream(recorder, lock)
+
+    @app.route("/display/view")
+    def display_view():
+        return _impl_display_view(recorder, lock)
+
     @app.route("/panels", methods=["GET"])
     def panels_list():
         return _impl_panels_list(recorder, lock)
@@ -538,6 +716,12 @@ def create_app(
             as_attachment=True,
             download_name=os.path.basename(path),
         )
+
+    @app.route("/recordings/<name>/screenshot", methods=["GET"])
+    def recordings_screenshot(name):
+        if not _safe_recording_name(name):
+            return jsonify({"error": "invalid recording name"}), 400
+        return _impl_recording_screenshot(recorder, lock, name)
 
     @app.route("/recordings/<name>/info", methods=["GET"])
     def recordings_info(name):
