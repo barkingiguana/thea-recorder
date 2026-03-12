@@ -335,6 +335,51 @@ class RecorderClient:
         """GET /recording/status — full recording status."""
         return self._request("GET", "/recording/status")
 
+    def add_annotation(
+        self,
+        label: str,
+        *,
+        time: float | None = None,
+        details: str | None = None,
+    ) -> dict[str, Any]:
+        """POST /recording/annotations — add an annotation to the active recording.
+
+        Parameters
+        ----------
+        label:
+            Short label for the annotation (e.g. ``"login_started"``).
+        time:
+            Time offset in seconds into the recording.  *None* uses the
+            current recording elapsed time.
+        details:
+            Optional longer description.
+
+        Returns
+        -------
+        dict
+            The created annotation with ``label``, ``time``, and
+            optional ``details``.
+        """
+        body: dict[str, Any] = {"label": label}
+        if time is not None:
+            body["time"] = time
+        if details is not None:
+            body["details"] = details
+        return self._request("POST", "/recording/annotations", body)
+
+    def list_annotations(self) -> list[dict[str, Any]]:
+        """GET /recording/annotations — list annotations for the active recording.
+
+        Returns
+        -------
+        list
+            List of annotation dicts.
+        """
+        result = self._request("GET", "/recording/annotations")
+        if isinstance(result, list):
+            return result  # type: ignore[return-value]
+        return []
+
     # ------------------------------------------------------------------
     # Recordings archive
     # ------------------------------------------------------------------

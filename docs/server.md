@@ -203,6 +203,45 @@ curl http://localhost:9123/recording/status
 {"recording": true, "name": "login_test", "elapsed": 12.5}
 ```
 
+### Annotations
+
+Annotations are timestamped markers attached to the active recording. They are returned in the stop-recording response and emitted as events.
+
+#### Add annotation
+```bash
+curl -X POST http://localhost:9123/recording/annotations \
+  -H "Content-Type: application/json" \
+  -d '{"label": "login_started", "details": "User clicked login button"}'
+```
+**Response** `201`:
+```json
+{"label": "login_started", "time": 3.456, "details": "User clicked login button"}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `label` | yes | Short annotation label |
+| `time` | no | Time offset in seconds (default: current elapsed) |
+| `details` | no | Optional longer description |
+
+**Error** `400` if label is missing or time is negative. `409` if not recording.
+
+#### List annotations
+```bash
+curl http://localhost:9123/recording/annotations
+```
+**Response** `200`:
+```json
+[
+  {"label": "login_started", "time": 3.456},
+  {"label": "assertion_passed", "time": 8.2, "details": "Login form submitted"}
+]
+```
+
+**Error** `409` if not recording.
+
+Annotations are included in the stop-recording response under the `annotations` key and cleared when the recording stops.
+
 ### File Access
 
 #### List recordings
