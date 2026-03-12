@@ -645,6 +645,54 @@ curl -X POST http://localhost:9123/director/window/tile \
 
 **Response** `200`: `{"status": "ok"}`
 
+## Events
+
+Every state-changing operation is logged to a per-session event log. Events are stored in memory and can be polled for live updates.
+
+### List events
+
+```bash
+# Default session events
+curl http://localhost:9123/events
+
+# Only events since a given elapsed time (for polling)
+curl http://localhost:9123/events?since=45.2
+
+# Session-scoped events
+curl http://localhost:9123/sessions/alice/events
+```
+
+**Response** `200`:
+```json
+[
+  {
+    "event": "display.started",
+    "time": "2026-03-12T10:30:00+00:00",
+    "elapsed": 0.5,
+    "details": {"display": ":99", "display_size": "1920x1080"}
+  },
+  {
+    "event": "recording.started",
+    "time": "2026-03-12T10:30:05+00:00",
+    "elapsed": 5.2,
+    "details": {"name": "login_test"}
+  }
+]
+```
+
+Event types: `display.started`, `display.stopped`, `panel.created`, `panel.updated`, `panel.removed`, `recording.started`, `recording.stopped`, `session.created`, `session.destroyed`, `cleanup`.
+
+## Dashboard
+
+A self-contained HTML dashboard that shows all active sessions with live MJPEG streams and a combined event log.
+
+```bash
+# Open in your browser:
+open http://localhost:9123/dashboard
+```
+
+The dashboard auto-refreshes sessions every 5 seconds and polls for new events every 3 seconds. Each session card shows a live stream thumbnail and recording status.
+
 ## Thread Safety
 
 All endpoints that mutate recorder state are protected by a `threading.Lock`. Concurrent callers (e.g., multiple SDK clients or panel updates from different threads) are safe.

@@ -111,6 +111,19 @@ thea list-recordings
 thea download --name login_test --output ./login_test.mp4
 ```
 
+### Events and Dashboard
+
+```bash
+# List all events for the current session
+thea events
+
+# List events since a given elapsed time (for polling)
+thea events --since 45.2
+
+# Get the dashboard URL (open in browser for live overview of all sessions)
+thea dashboard-url
+```
+
 ### Utility
 
 ```bash

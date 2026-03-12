@@ -384,6 +384,43 @@ class RecorderClient:
         return self._request_raw("GET", f"/recordings/{name}/screenshot{params}")
 
     # ------------------------------------------------------------------
+    # Events
+    # ------------------------------------------------------------------
+
+    def events(self, *, since: float | None = None) -> list[dict[str, Any]]:
+        """GET /events — return the event log for the current session.
+
+        Parameters
+        ----------
+        since:
+            Only return events with ``elapsed`` greater than this value.
+            Useful for polling for new events.
+
+        Returns
+        -------
+        list
+            List of event dicts with ``event``, ``time``, ``elapsed``,
+            and optional ``details`` keys.
+        """
+        path = "/events"
+        if since is not None:
+            path = f"/events?since={since}"
+        result = self._request("GET", path)
+        if isinstance(result, list):
+            return result  # type: ignore[return-value]
+        return []
+
+    def dashboard_url(self) -> str:
+        """Return the URL for the HTML dashboard page.
+
+        Returns
+        -------
+        str
+            Full URL to the dashboard.
+        """
+        return f"{self.base_url}/dashboard"
+
+    # ------------------------------------------------------------------
     # Health / cleanup
     # ------------------------------------------------------------------
 

@@ -31,6 +31,109 @@ from .recorder import Recorder
 logger = logging.getLogger("recorder.server")
 
 
+_DASHBOARD_HTML = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thea Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0d0d1a;color:#e0e0e0;padding:16px}
+h1{font-size:1.4em;margin-bottom:12px;color:#00d4aa}
+.sessions{display:flex;flex-wrap:wrap;gap:16px}
+.session{background:#1a1a2e;border-radius:8px;overflow:hidden;flex:1;min-width:400px;max-width:600px}
+.session-header{padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a2a4e}
+.session-header h2{font-size:1.1em;font-weight:600}
+.session-header .badge{font-size:.75em;padding:2px 8px;border-radius:10px;background:#2a2a4e}
+.badge.recording{background:#d4004a;color:#fff}
+.badge.idle{background:#2a2a4e;color:#888}
+.session-stream{width:100%;background:#000;display:block;min-height:180px}
+.session-info{padding:10px 14px;font-size:.85em;color:#888}
+.session-info span{margin-right:16px}
+.events-panel{background:#1a1a2e;border-radius:8px;margin-top:16px;padding:14px;max-height:300px;overflow-y:auto}
+.events-panel h2{font-size:1em;margin-bottom:8px;color:#00d4aa}
+.event{font-family:monospace;font-size:.8em;padding:3px 0;border-bottom:1px solid #1a1a2e;color:#b0b0b0}
+.event .time{color:#666;margin-right:8px}
+.event .type{color:#00d4aa;margin-right:8px}
+.no-sessions{color:#666;font-style:italic;padding:20px}
+</style>
+</head>
+<body>
+<h1>Thea Dashboard</h1>
+<div class="sessions" id="sessions"></div>
+<div class="events-panel" id="events-panel">
+<h2>Events</h2>
+<div id="events"></div>
+</div>
+<script>
+const BASE = location.origin;
+let lastElapsed = 0;
+
+async function refresh() {
+  try {
+    const resp = await fetch(BASE + '/sessions');
+    const sessions = await resp.json();
+    const el = document.getElementById('sessions');
+    if (!sessions.length) { el.innerHTML = '<div class="no-sessions">No sessions</div>'; return; }
+    el.innerHTML = sessions.map(s => {
+      const badge = s.recording
+        ? `<span class="badge recording">REC: ${s.recording_name}</span>`
+        : `<span class="badge idle">idle</span>`;
+      const prefix = s.name === 'default' ? '' : `/sessions/${s.name}`;
+      return `<div class="session">
+        <div class="session-header"><h2>${s.name}</h2>${badge}</div>
+        <img class="session-stream" src="${prefix}/display/stream?fps=2"
+             onerror="this.style.opacity=0.3" alt="Display :${s.display}">
+        <div class="session-info">
+          <span>Display :${s.display}</span>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('refresh failed', e); }
+}
+
+async function refreshEvents() {
+  try {
+    // Gather events from all sessions
+    const sessResp = await fetch(BASE + '/sessions');
+    const sessions = await sessResp.json();
+    let allEvents = [];
+    for (const s of sessions) {
+      const prefix = s.name === 'default' ? '' : `/sessions/${s.name}`;
+      const evResp = await fetch(BASE + prefix + `/events?since=${lastElapsed}`);
+      const evts = await evResp.json();
+      evts.forEach(e => e._session = s.name);
+      allEvents = allEvents.concat(evts);
+    }
+    if (!allEvents.length) return;
+    allEvents.sort((a, b) => a.elapsed - b.elapsed);
+    lastElapsed = Math.max(lastElapsed, allEvents[allEvents.length - 1].elapsed);
+    const container = document.getElementById('events');
+    allEvents.forEach(e => {
+      const div = document.createElement('div');
+      div.className = 'event';
+      const details = e.details ? ' ' + JSON.stringify(e.details) : '';
+      div.innerHTML = `<span class="time">${e.time.split('T')[1].split('.')[0]}</span>`
+        + `<span class="type">[${e._session}] ${e.event}</span>${details}`;
+      container.prepend(div);
+    });
+    // Limit to 200 events in DOM
+    while (container.children.length > 200) container.removeChild(container.lastChild);
+  } catch(e) { console.error('events refresh failed', e); }
+}
+
+refresh();
+refreshEvents();
+setInterval(refresh, 5000);
+setInterval(refreshEvents, 3000);
+</script>
+</body>
+</html>
+"""
+
+
 def create_app(
     output_dir: str = "/tmp/recordings",
     display: int = 99,
@@ -65,7 +168,30 @@ def create_app(
             "lock": threading.Lock(),
             "current_name": {"name": None},
             "display": display_num,
+            "events": [],
+            "events_lock": threading.Lock(),
         }
+
+    def _emit_event(sess: dict, event: str, details: dict | None = None) -> dict:
+        """Append a timestamped event to the session's event log."""
+        entry = {
+            "event": event,
+            "time": datetime.now(timezone.utc).isoformat(),
+            "elapsed": time.monotonic() - start_time,
+        }
+        if details:
+            entry["details"] = details
+        with sess["events_lock"]:
+            sess["events"].append(entry)
+        return entry
+
+    def _find_session_for_recorder(rec) -> dict | None:
+        """Find the session dict that owns *rec*."""
+        with _sessions_lock:
+            for sess in _sessions.values():
+                if sess["recorder"] is rec:
+                    return sess
+        return None
 
     # default session (backward-compat — existing endpoints use this)
     _default = _make_session(display)
@@ -124,18 +250,23 @@ def create_app(
     # Each function accepts explicit session components so it can be
     # called from both the default routes and the /sessions/<name>/... routes.
 
-    def _impl_display_start(rec, sess_lock):
+    def _impl_display_start(rec, sess_lock, sess=None):
         data = request.get_json(silent=True) or {}
         req_display_size = data.get("display_size")
         with sess_lock:
             if rec._xvfb_proc is not None:
                 return jsonify({"error": "display already started"}), 409
             rec.start_display(display_size=req_display_size)
+            if sess:
+                _emit_event(sess, "display.started", {"display": rec.display_string,
+                            "display_size": req_display_size or display_size})
             return jsonify({"status": "started", "display": rec.display_string}), 201
 
-    def _impl_display_stop(rec, sess_lock):
+    def _impl_display_stop(rec, sess_lock, sess=None):
         with sess_lock:
             rec.stop_display()
+            if sess:
+                _emit_event(sess, "display.stopped")
             return jsonify({"status": "stopped"}), 200
 
     def _impl_display_screenshot(rec, sess_lock):
@@ -278,7 +409,7 @@ img.onerror = function() {{
             ]
         return jsonify(panels), 200
 
-    def _impl_panels_create(rec, sess_lock):
+    def _impl_panels_create(rec, sess_lock, sess=None):
         data = request.get_json(silent=True) or {}
         name = data.get("name")
         if not name or not isinstance(name, str) or name.strip() == "":
@@ -310,13 +441,15 @@ img.onerror = function() {{
         with sess_lock:
             warnings = rec.add_panel(name, title=title, width=width, height=height,
                                      bg_color=bg_color, opacity=opacity)
+        if sess:
+            _emit_event(sess, "panel.created", {"name": name, "title": title, "width": width})
         result = {"name": name, "title": title, "width": width, "height": height,
                   "bg_color": bg_color, "opacity": opacity}
         if warnings:
             result["warnings"] = warnings
         return jsonify(result), 201
 
-    def _impl_panels_update(rec, sess_lock, panel_name):
+    def _impl_panels_update(rec, sess_lock, panel_name, sess=None):
         with sess_lock:
             if panel_name not in rec._panels:
                 return jsonify({"error": f"panel '{panel_name}' not found"}), 404
@@ -324,16 +457,20 @@ img.onerror = function() {{
             text = data.get("text", "")
             focus_line = data.get("focus_line", -1)
             rec.update_panel(panel_name, text, focus_line=focus_line)
+        if sess:
+            _emit_event(sess, "panel.updated", {"name": panel_name})
         return jsonify({"name": panel_name, "text": text}), 200
 
-    def _impl_panels_delete(rec, sess_lock, panel_name):
+    def _impl_panels_delete(rec, sess_lock, panel_name, sess=None):
         with sess_lock:
             if panel_name not in rec._panels:
                 return jsonify({"error": f"panel '{panel_name}' not found"}), 404
             rec.remove_panel(panel_name)
+        if sess:
+            _emit_event(sess, "panel.removed", {"name": panel_name})
         return jsonify({"status": "removed"}), 200
 
-    def _impl_recording_start(rec, sess_lock, cur_name):
+    def _impl_recording_start(rec, sess_lock, cur_name, sess=None):
         data = request.get_json(silent=True) or {}
         name = data.get("name")
         if not name or not isinstance(name, str) or name.strip() == "":
@@ -343,12 +480,14 @@ img.onerror = function() {{
                 return jsonify({"error": "already recording"}), 409
             cur_name["name"] = name
             warnings = rec.start_recording(name)
+        if sess:
+            _emit_event(sess, "recording.started", {"name": name})
         result = {"status": "recording", "name": name}
         if warnings:
             result["warnings"] = warnings
         return jsonify(result), 201
 
-    def _impl_recording_stop(rec, sess_lock, cur_name):
+    def _impl_recording_stop(rec, sess_lock, cur_name, sess=None):
         with sess_lock:
             if rec._ffmpeg_proc is None:
                 return jsonify({"error": "not recording"}), 409
@@ -356,6 +495,8 @@ img.onerror = function() {{
             path = rec.stop_recording()
             name = cur_name["name"]
             cur_name["name"] = None
+        if sess:
+            _emit_event(sess, "recording.stopped", {"name": name, "elapsed": round(elapsed, 2), "path": path})
         return jsonify({"path": path, "elapsed": round(elapsed, 2), "name": name}), 200
 
     def _impl_recording_elapsed(rec, sess_lock):
@@ -370,10 +511,12 @@ img.onerror = function() {{
             elapsed = round(rec.recording_elapsed, 2)
         return jsonify({"recording": is_recording, "name": name, "elapsed": elapsed}), 200
 
-    def _impl_cleanup(rec, sess_lock, cur_name):
+    def _impl_cleanup(rec, sess_lock, cur_name, sess=None):
         with sess_lock:
             cur_name["name"] = None
             rec.cleanup()
+        if sess:
+            _emit_event(sess, "cleanup")
         return jsonify({"status": "cleaned"}), 200
 
     def _impl_validate_layout(rec, sess_lock):
@@ -461,6 +604,7 @@ img.onerror = function() {{
             sess = _make_session(display_num)
             _sessions[name] = sess
 
+        _emit_event(sess, "session.created", {"name": name, "display": display_num})
         return jsonify({"name": name, "display": display_num, "url_prefix": f"/sessions/{name}"}), 201
 
     @app.route("/sessions", methods=["GET"])
@@ -489,8 +633,41 @@ img.onerror = function() {{
             sess = _sessions.pop(session_name, None)
         if sess is None:
             return jsonify({"error": f"session '{session_name}' not found"}), 404
-        _impl_cleanup(sess["recorder"], sess["lock"], sess["current_name"])
+        _emit_event(sess, "session.destroyed", {"name": session_name})
+        _impl_cleanup(sess["recorder"], sess["lock"], sess["current_name"], sess=sess)
         return jsonify({"status": "removed"}), 200
+
+    # ── Events endpoints ────────────────────────────────────────────────────
+
+    @app.route("/events", methods=["GET"])
+    def events():
+        """Return the event log for the default session."""
+        since = request.args.get("since", type=float)
+        with _default["events_lock"]:
+            evts = list(_default["events"])
+        if since is not None:
+            evts = [e for e in evts if e["elapsed"] > since]
+        return jsonify(evts), 200
+
+    @app.route("/sessions/<session_name>/events", methods=["GET"])
+    def sess_events(session_name):
+        """Return the event log for a named session."""
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        since = request.args.get("since", type=float)
+        with sess["events_lock"]:
+            evts = list(sess["events"])
+        if since is not None:
+            evts = [e for e in evts if e["elapsed"] > since]
+        return jsonify(evts), 200
+
+    # ── Dashboard ────────────────────────────────────────────────────────
+
+    @app.route("/dashboard")
+    def dashboard():
+        """Self-contained HTML dashboard showing all sessions and live streams."""
+        return Response(_DASHBOARD_HTML, mimetype="text/html")
 
     # ── Session-scoped endpoints (/sessions/<name>/...) ────────────────────
 
@@ -499,14 +676,14 @@ img.onerror = function() {{
         sess, err = _session_or_404(session_name)
         if err:
             return err
-        return _impl_display_start(sess["recorder"], sess["lock"])
+        return _impl_display_start(sess["recorder"], sess["lock"], sess=sess)
 
     @app.route("/sessions/<session_name>/display/stop", methods=["POST"])
     def sess_display_stop(session_name):
         sess, err = _session_or_404(session_name)
         if err:
             return err
-        return _impl_display_stop(sess["recorder"], sess["lock"])
+        return _impl_display_stop(sess["recorder"], sess["lock"], sess=sess)
 
     @app.route("/sessions/<session_name>/display/screenshot")
     def sess_display_screenshot(session_name):
@@ -541,35 +718,35 @@ img.onerror = function() {{
         sess, err = _session_or_404(session_name)
         if err:
             return err
-        return _impl_panels_create(sess["recorder"], sess["lock"])
+        return _impl_panels_create(sess["recorder"], sess["lock"], sess=sess)
 
     @app.route("/sessions/<session_name>/panels/<panel_name>", methods=["PUT"])
     def sess_panels_update(session_name, panel_name):
         sess, err = _session_or_404(session_name)
         if err:
             return err
-        return _impl_panels_update(sess["recorder"], sess["lock"], panel_name)
+        return _impl_panels_update(sess["recorder"], sess["lock"], panel_name, sess=sess)
 
     @app.route("/sessions/<session_name>/panels/<panel_name>", methods=["DELETE"])
     def sess_panels_delete(session_name, panel_name):
         sess, err = _session_or_404(session_name)
         if err:
             return err
-        return _impl_panels_delete(sess["recorder"], sess["lock"], panel_name)
+        return _impl_panels_delete(sess["recorder"], sess["lock"], panel_name, sess=sess)
 
     @app.route("/sessions/<session_name>/recording/start", methods=["POST"])
     def sess_recording_start(session_name):
         sess, err = _session_or_404(session_name)
         if err:
             return err
-        return _impl_recording_start(sess["recorder"], sess["lock"], sess["current_name"])
+        return _impl_recording_start(sess["recorder"], sess["lock"], sess["current_name"], sess=sess)
 
     @app.route("/sessions/<session_name>/recording/stop", methods=["POST"])
     def sess_recording_stop(session_name):
         sess, err = _session_or_404(session_name)
         if err:
             return err
-        return _impl_recording_stop(sess["recorder"], sess["lock"], sess["current_name"])
+        return _impl_recording_stop(sess["recorder"], sess["lock"], sess["current_name"], sess=sess)
 
     @app.route("/sessions/<session_name>/recording/elapsed", methods=["GET"])
     def sess_recording_elapsed(session_name):
@@ -590,7 +767,7 @@ img.onerror = function() {{
         sess, err = _session_or_404(session_name)
         if err:
             return err
-        return _impl_cleanup(sess["recorder"], sess["lock"], sess["current_name"])
+        return _impl_cleanup(sess["recorder"], sess["lock"], sess["current_name"], sess=sess)
 
     @app.route("/sessions/<session_name>/health", methods=["GET"])
     def sess_health(session_name):
@@ -617,11 +794,11 @@ img.onerror = function() {{
 
     @app.route("/display/start", methods=["POST"])
     def display_start():
-        return _impl_display_start(recorder, lock)
+        return _impl_display_start(recorder, lock, sess=_default)
 
     @app.route("/display/stop", methods=["POST"])
     def display_stop():
-        return _impl_display_stop(recorder, lock)
+        return _impl_display_stop(recorder, lock, sess=_default)
 
     @app.route("/display/screenshot")
     def display_screenshot():
@@ -641,23 +818,23 @@ img.onerror = function() {{
 
     @app.route("/panels", methods=["POST"])
     def panels_create():
-        return _impl_panels_create(recorder, lock)
+        return _impl_panels_create(recorder, lock, sess=_default)
 
     @app.route("/panels/<name>", methods=["PUT"])
     def panels_update(name):
-        return _impl_panels_update(recorder, lock, name)
+        return _impl_panels_update(recorder, lock, name, sess=_default)
 
     @app.route("/panels/<name>", methods=["DELETE"])
     def panels_delete(name):
-        return _impl_panels_delete(recorder, lock, name)
+        return _impl_panels_delete(recorder, lock, name, sess=_default)
 
     @app.route("/recording/start", methods=["POST"])
     def recording_start():
-        return _impl_recording_start(recorder, lock, current_recording_name)
+        return _impl_recording_start(recorder, lock, current_recording_name, sess=_default)
 
     @app.route("/recording/stop", methods=["POST"])
     def recording_stop():
-        return _impl_recording_stop(recorder, lock, current_recording_name)
+        return _impl_recording_stop(recorder, lock, current_recording_name, sess=_default)
 
     @app.route("/recording/elapsed", methods=["GET"])
     def recording_elapsed():
@@ -754,7 +931,7 @@ img.onerror = function() {{
 
     @app.route("/cleanup", methods=["POST"])
     def cleanup():
-        return _impl_cleanup(recorder, lock, current_recording_name)
+        return _impl_cleanup(recorder, lock, current_recording_name, sess=_default)
 
     # ── Composition endpoints ─────────────────────────────────────────────
 
