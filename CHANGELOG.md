@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.11.0] — 2026-03-12
+
+### Features
+- feat: add per-session event log and live dashboard
+
+### Other
+- Merge pull request #19 from barkingiguana/feat/event-log-and-dashboard
+
+
 ## [0.10.0] — 2026-03-12
 
 ### Features
