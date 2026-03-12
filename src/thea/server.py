@@ -170,6 +170,7 @@ def create_app(
             "display": display_num,
             "events": [],
             "events_lock": threading.Lock(),
+            "annotations": [],
         }
 
     def _emit_event(sess: dict, event: str, details: dict | None = None) -> dict:
@@ -495,9 +496,16 @@ img.onerror = function() {{
             path = rec.stop_recording()
             name = cur_name["name"]
             cur_name["name"] = None
+        annotations = []
         if sess:
+            with sess["events_lock"]:
+                annotations = list(sess["annotations"])
+                sess["annotations"] = []
             _emit_event(sess, "recording.stopped", {"name": name, "elapsed": round(elapsed, 2), "path": path})
-        return jsonify({"path": path, "elapsed": round(elapsed, 2), "name": name}), 200
+        result = {"path": path, "elapsed": round(elapsed, 2), "name": name}
+        if annotations:
+            result["annotations"] = annotations
+        return jsonify(result), 200
 
     def _impl_recording_elapsed(rec, sess_lock):
         with sess_lock:
@@ -510,6 +518,40 @@ img.onerror = function() {{
             name = cur_name["name"] if is_recording else None
             elapsed = round(rec.recording_elapsed, 2)
         return jsonify({"recording": is_recording, "name": name, "elapsed": elapsed}), 200
+
+    def _impl_annotations_add(rec, sess_lock, sess):
+        data = request.get_json(silent=True) or {}
+        label = data.get("label")
+        if not label or not isinstance(label, str) or label.strip() == "":
+            return jsonify({"error": "field 'label' is required and must be a non-empty string"}), 400
+        with sess_lock:
+            if rec._ffmpeg_proc is None:
+                return jsonify({"error": "not recording"}), 409
+            elapsed = rec.recording_elapsed
+        time_offset = data.get("time")
+        if time_offset is not None:
+            if not isinstance(time_offset, (int, float)) or time_offset < 0:
+                return jsonify({"error": "'time' must be a non-negative number"}), 400
+        else:
+            time_offset = round(elapsed, 3)
+        annotation = {
+            "label": label.strip(),
+            "time": round(time_offset, 3),
+        }
+        details = data.get("details")
+        if details is not None:
+            annotation["details"] = details
+        with sess["events_lock"]:
+            sess["annotations"].append(annotation)
+        _emit_event(sess, "recording.annotated", {"label": annotation["label"], "time": annotation["time"]})
+        return jsonify(annotation), 201
+
+    def _impl_annotations_list(rec, sess_lock, sess):
+        with sess_lock:
+            if rec._ffmpeg_proc is None:
+                return jsonify({"error": "not recording"}), 409
+        with sess["events_lock"]:
+            return jsonify(list(sess["annotations"])), 200
 
     def _impl_cleanup(rec, sess_lock, cur_name, sess=None):
         with sess_lock:
@@ -762,6 +804,20 @@ img.onerror = function() {{
             return err
         return _impl_recording_status(sess["recorder"], sess["lock"], sess["current_name"])
 
+    @app.route("/sessions/<session_name>/recording/annotations", methods=["POST"])
+    def sess_annotations_add(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_annotations_add(sess["recorder"], sess["lock"], sess)
+
+    @app.route("/sessions/<session_name>/recording/annotations", methods=["GET"])
+    def sess_annotations_list(session_name):
+        sess, err = _session_or_404(session_name)
+        if err:
+            return err
+        return _impl_annotations_list(sess["recorder"], sess["lock"], sess)
+
     @app.route("/sessions/<session_name>/cleanup", methods=["POST"])
     def sess_cleanup(session_name):
         sess, err = _session_or_404(session_name)
@@ -843,6 +899,14 @@ img.onerror = function() {{
     @app.route("/recording/status", methods=["GET"])
     def recording_status():
         return _impl_recording_status(recorder, lock, current_recording_name)
+
+    @app.route("/recording/annotations", methods=["POST"])
+    def annotations_add():
+        return _impl_annotations_add(recorder, lock, _default)
+
+    @app.route("/recording/annotations", methods=["GET"])
+    def annotations_list():
+        return _impl_annotations_list(recorder, lock, _default)
 
     # -- File access endpoints (shared across all sessions) ----------------
 

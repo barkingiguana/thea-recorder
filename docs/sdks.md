@@ -87,6 +87,8 @@ Every SDK provides:
 | `stop_recording()` | Stop recording, get path + elapsed |
 | `recording_elapsed()` | Get elapsed seconds |
 | `recording_status()` | Get recording state |
+| `add_annotation(label, time, details)` | Add a timestamped annotation to the active recording |
+| `list_annotations()` | List annotations for the active recording |
 | `list_recordings()` | List available MP4 files |
 | `download_recording(name, path)` | Download MP4 to local file |
 | `recording_info(name)` | Get file metadata |

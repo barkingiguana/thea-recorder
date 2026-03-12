@@ -345,6 +345,44 @@ def elapsed(ctx):
     _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
 
 
+@main.command("annotate")
+@click.option("--label", required=True, help="Annotation label.")
+@click.option("--time", "time_offset", type=float, default=None, help="Time offset in seconds (default: current elapsed).")
+@click.option("--details", default=None, help="Optional details text.")
+@click.pass_context
+def annotate(ctx, label, time_offset, details):
+    """Add an annotation to the active recording."""
+    server = _server_url(ctx)
+    body = {"label": label}
+    if time_offset is not None:
+        body["time"] = time_offset
+    if details is not None:
+        body["details"] = details
+    try:
+        status, data = _request(f"{server}/recording/annotations", method="POST", data=body)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("list-annotations")
+@click.pass_context
+def list_annotations(ctx):
+    """List annotations for the active recording."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(f"{server}/recording/annotations")
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
 # ── File commands ────────────────────────────────────────────────────────
 
 @main.command("list-recordings")

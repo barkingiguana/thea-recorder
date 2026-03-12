@@ -101,6 +101,17 @@ thea elapsed
 thea stop-recording
 ```
 
+### Annotations
+
+```bash
+# Add an annotation to the active recording
+thea annotate --label "login_started"
+thea annotate --label "step_1" --time 5.5 --details "Clicked submit button"
+
+# List annotations for the active recording
+thea list-annotations
+```
+
 ### File Operations
 
 ```bash
