@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.13.0] — 2026-03-12
+
+### Features
+- feat: add recording annotation endpoints
+
+### Other
+- Merge pull request #23 from barkingiguana/feat/annotations
+
+
 ## [0.12.0] — 2026-03-12
 
 ### Features
