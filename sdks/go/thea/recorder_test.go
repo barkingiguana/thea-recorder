@@ -108,6 +108,10 @@ func fakeServer() *httptest.Server {
 			Name string `json:"name"`
 		}
 		json.NewDecoder(r.Body).Decode(&body)
+		if recording.Load() {
+			http.Error(w, `{"error":"already recording"}`, http.StatusConflict)
+			return
+		}
 		recording.Store(true)
 		recName.Store(body.Name)
 		w.WriteHeader(http.StatusCreated)
@@ -160,6 +164,69 @@ func fakeServer() *httptest.Server {
 		// binary download
 		w.Header().Set("Content-Type", "video/mp4")
 		w.Write([]byte("fake-mp4-data"))
+	})
+
+	// Compositions
+	var compositions sync.Map // name -> *thea.CompositionStatus
+
+	mux.HandleFunc("/compositions", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/compositions" {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		switch r.Method {
+		case http.MethodPost:
+			var req thea.CompositionRequest
+			json.NewDecoder(r.Body).Decode(&req)
+			if _, exists := compositions.Load(req.Name); exists {
+				http.Error(w, `{"error":"composition already exists"}`, http.StatusConflict)
+				return
+			}
+			cs := &thea.CompositionStatus{
+				Name:       req.Name,
+				Status:     "complete",
+				Recordings: req.Recordings,
+				OutputPath: "/compositions/" + req.Name + ".mp4",
+			}
+			compositions.Store(req.Name, cs)
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(cs)
+		case http.MethodGet:
+			var list []thea.CompositionStatus
+			compositions.Range(func(_, v any) bool {
+				list = append(list, *v.(*thea.CompositionStatus))
+				return true
+			})
+			if list == nil {
+				list = []thea.CompositionStatus{}
+			}
+			json.NewEncoder(w).Encode(list)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/compositions/", func(w http.ResponseWriter, r *http.Request) {
+		name := strings.TrimPrefix(r.URL.Path, "/compositions/")
+		name = strings.TrimSuffix(name, "/highlights")
+		if strings.Contains(r.URL.Path, "/highlights") {
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusCreated)
+				return
+			}
+		}
+		switch r.Method {
+		case http.MethodGet:
+			if v, ok := compositions.Load(name); ok {
+				json.NewEncoder(w).Encode(v)
+			} else {
+				http.Error(w, "not found", http.StatusNotFound)
+			}
+		case http.MethodDelete:
+			compositions.Delete(name)
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
 	})
 
 	// Health
@@ -597,6 +664,138 @@ func TestConcurrentPanels(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// ---------------------------------------------------------------------------
+// Error helper tests
+// ---------------------------------------------------------------------------
+
+func TestIsConflict(t *testing.T) {
+	err := &thea.RecorderError{StatusCode: http.StatusConflict, Status: "409 Conflict"}
+	if !thea.IsConflict(err) {
+		t.Fatal("expected IsConflict to return true for 409")
+	}
+	if thea.IsConflict(&thea.RecorderError{StatusCode: 500}) {
+		t.Fatal("expected IsConflict to return false for 500")
+	}
+	if thea.IsConflict(fmt.Errorf("other error")) {
+		t.Fatal("expected IsConflict to return false for non-RecorderError")
+	}
+}
+
+func TestIsAccepted(t *testing.T) {
+	err := &thea.RecorderError{StatusCode: http.StatusAccepted, Status: "202 Accepted"}
+	if !thea.IsAccepted(err) {
+		t.Fatal("expected IsAccepted to return true for 202")
+	}
+	if thea.IsAccepted(&thea.RecorderError{StatusCode: 200}) {
+		t.Fatal("expected IsAccepted to return false for 200")
+	}
+}
+
+func TestIsNotFound(t *testing.T) {
+	err := &thea.RecorderError{StatusCode: http.StatusNotFound, Status: "404 Not Found"}
+	if !thea.IsNotFound(err) {
+		t.Fatal("expected IsNotFound to return true for 404")
+	}
+	if thea.IsNotFound(&thea.RecorderError{StatusCode: 200}) {
+		t.Fatal("expected IsNotFound to return false for 200")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Idempotent helper tests
+// ---------------------------------------------------------------------------
+
+func TestEnsureRecording_Fresh(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+	ctx := context.Background()
+
+	status, err := c.EnsureRecording(ctx, "demo")
+	if err != nil {
+		t.Fatalf("EnsureRecording: %v", err)
+	}
+	if !status.Recording {
+		t.Fatal("expected recording=true")
+	}
+	if status.Name != "demo" {
+		t.Fatalf("expected name 'demo', got %q", status.Name)
+	}
+}
+
+func TestEnsureRecording_AlreadyRecording(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+	ctx := context.Background()
+
+	// Start a recording first.
+	if _, err := c.StartRecording(ctx, "first"); err != nil {
+		t.Fatalf("StartRecording: %v", err)
+	}
+
+	// EnsureRecording should succeed even though already recording.
+	status, err := c.EnsureRecording(ctx, "second")
+	if err != nil {
+		t.Fatalf("EnsureRecording: %v", err)
+	}
+	if !status.Recording {
+		t.Fatal("expected recording=true")
+	}
+	// Name should be the original recording, not the new one.
+	if status.Name != "first" {
+		t.Fatalf("expected name 'first', got %q", status.Name)
+	}
+}
+
+func TestCreateCompositionAndWait_Fresh(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+	ctx := context.Background()
+
+	req := thea.CompositionRequest{
+		Name:       "comp1",
+		Recordings: []string{"a", "b"},
+	}
+	status, err := c.CreateCompositionAndWait(ctx, req, 5*time.Second)
+	if err != nil {
+		t.Fatalf("CreateCompositionAndWait: %v", err)
+	}
+	if status.Status != "complete" {
+		t.Fatalf("expected status 'complete', got %q", status.Status)
+	}
+	if status.Name != "comp1" {
+		t.Fatalf("expected name 'comp1', got %q", status.Name)
+	}
+}
+
+func TestCreateCompositionAndWait_AlreadyExists(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+	ctx := context.Background()
+
+	req := thea.CompositionRequest{
+		Name:       "comp2",
+		Recordings: []string{"a", "b"},
+	}
+
+	// Create it first.
+	if _, err := c.CreateComposition(ctx, req); err != nil {
+		t.Fatalf("CreateComposition: %v", err)
+	}
+
+	// CreateCompositionAndWait should handle the 409 and poll.
+	status, err := c.CreateCompositionAndWait(ctx, req, 5*time.Second)
+	if err != nil {
+		t.Fatalf("CreateCompositionAndWait: %v", err)
+	}
+	if status.Status != "complete" {
+		t.Fatalf("expected status 'complete', got %q", status.Status)
+	}
 }
 
 // errAs is a helper to avoid importing errors package in test.
