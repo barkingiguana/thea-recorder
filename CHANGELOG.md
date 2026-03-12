@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.2] — 2026-03-12
+
+### Fixes
+- fix: use default openbox config instead of /dev/null
+
+### Other
+- Merge pull request #17 from barkingiguana/fix/openbox-config
+
+
 ## [0.9.1] — 2026-03-11
 
 ### Fixes

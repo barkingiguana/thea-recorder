@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "thea-recorder"
-version = "0.9.1"
+version = "0.9.2"
 description = "Record Xvfb virtual displays as MP4 video with live panel overlays and interactive HTML reports."
 requires-python = ">=3.10"
 dependencies = ["click>=8.0", "flask>=3.0", "selenium>=4.0"]
