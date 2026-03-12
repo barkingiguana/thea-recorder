@@ -102,6 +102,102 @@ type CompositionHighlight struct {
 	Duration  float64 `json:"duration"`
 }
 
+// Annotation describes a timestamped annotation on a recording.
+type Annotation struct {
+	Label   string  `json:"label"`
+	Time    float64 `json:"time"`
+	Details string  `json:"details,omitempty"`
+}
+
+// AddAnnotationRequest is the payload for POST /recording/annotations.
+type AddAnnotationRequest struct {
+	Label   string   `json:"label"`
+	Time    *float64 `json:"time,omitempty"`
+	Details string   `json:"details,omitempty"`
+}
+
+// Event describes an entry in the session event log.
+type Event struct {
+	Event   string         `json:"event"`
+	Time    string         `json:"time"`
+	Elapsed float64        `json:"elapsed"`
+	Details map[string]any `json:"details,omitempty"`
+}
+
+// MousePos describes the current cursor position.
+type MousePos struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
+// MouseMoveRequest is the payload for POST /director/mouse/move.
+type MouseMoveRequest struct {
+	X           int      `json:"x"`
+	Y           int      `json:"y"`
+	Duration    *float64 `json:"duration,omitempty"`
+	TargetWidth *float64 `json:"target_width,omitempty"`
+}
+
+// MouseClickRequest is the payload for POST /director/mouse/click.
+type MouseClickRequest struct {
+	X        *int     `json:"x,omitempty"`
+	Y        *int     `json:"y,omitempty"`
+	Button   int      `json:"button"`
+	Duration *float64 `json:"duration,omitempty"`
+}
+
+// MouseDragRequest is the payload for POST /director/mouse/drag.
+type MouseDragRequest struct {
+	StartX   int      `json:"start_x"`
+	StartY   int      `json:"start_y"`
+	EndX     int      `json:"end_x"`
+	EndY     int      `json:"end_y"`
+	Button   int      `json:"button"`
+	Duration *float64 `json:"duration,omitempty"`
+}
+
+// MouseScrollRequest is the payload for POST /director/mouse/scroll.
+type MouseScrollRequest struct {
+	Clicks int  `json:"clicks"`
+	X      *int `json:"x,omitempty"`
+	Y      *int `json:"y,omitempty"`
+}
+
+// KeyboardTypeRequest is the payload for POST /director/keyboard/type.
+type KeyboardTypeRequest struct {
+	Text string   `json:"text"`
+	WPM  *float64 `json:"wpm,omitempty"`
+}
+
+// WindowFindRequest is the payload for POST /director/window/find.
+type WindowFindRequest struct {
+	Name      string  `json:"name,omitempty"`
+	ClassName string  `json:"class,omitempty"`
+	Timeout   float64 `json:"timeout"`
+}
+
+// WindowInfo is the payload returned by POST /director/window/find.
+type WindowInfo struct {
+	WindowID string `json:"window_id"`
+	Name     string `json:"name,omitempty"`
+	Class    string `json:"class,omitempty"`
+}
+
+// WindowGeometryInfo is the payload returned by GET /director/window/{id}/geometry.
+type WindowGeometryInfo struct {
+	X      int `json:"x"`
+	Y      int `json:"y"`
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+// WindowTileRequest is the payload for POST /director/window/tile.
+type WindowTileRequest struct {
+	WindowIDs []string `json:"window_ids"`
+	Layout    string   `json:"layout"`
+	Bounds    []int    `json:"bounds,omitempty"`
+}
+
 // CompositionRequest is the payload for POST /compositions.
 type CompositionRequest struct {
 	Name           string                 `json:"name"`
@@ -181,6 +277,24 @@ func (c *Client) StartDisplay(ctx context.Context, displaySize ...string) error 
 // StopDisplay stops the virtual display (POST /display/stop).
 func (c *Client) StopDisplay(ctx context.Context) error {
 	return c.doSimple(ctx, http.MethodPost, "/display/stop", nil, http.StatusOK)
+}
+
+// DisplayScreenshot captures a JPEG screenshot of the live display
+// (GET /display/screenshot?quality=N). Returns the raw JPEG bytes.
+func (c *Client) DisplayScreenshot(ctx context.Context, quality int) ([]byte, error) {
+	return c.doRawGet(ctx, fmt.Sprintf("/display/screenshot?quality=%d", quality))
+}
+
+// DisplayStreamURL returns the URL for the live MJPEG stream. No HTTP call
+// is made.
+func (c *Client) DisplayStreamURL(fps int) string {
+	return fmt.Sprintf("%s/display/stream?fps=%d", c.baseURL, fps)
+}
+
+// DisplayViewerURL returns the URL for the HTML live viewer page. No HTTP
+// call is made.
+func (c *Client) DisplayViewerURL() string {
+	return c.baseURL + "/display/view"
 }
 
 // ---------------------------------------------------------------------------
@@ -276,6 +390,26 @@ func (c *Client) RecordingStatusInfo(ctx context.Context) (*RecordingStatus, err
 	return &status, nil
 }
 
+// AddAnnotation adds an annotation to the active recording
+// (POST /recording/annotations).
+func (c *Client) AddAnnotation(ctx context.Context, req AddAnnotationRequest) (*Annotation, error) {
+	var ann Annotation
+	if err := c.doJSON(ctx, http.MethodPost, "/recording/annotations", req, http.StatusCreated, &ann); err != nil {
+		return nil, err
+	}
+	return &ann, nil
+}
+
+// ListAnnotations returns all annotations for the active recording
+// (GET /recording/annotations).
+func (c *Client) ListAnnotations(ctx context.Context) ([]Annotation, error) {
+	var anns []Annotation
+	if err := c.doJSON(ctx, http.MethodGet, "/recording/annotations", nil, http.StatusOK, &anns); err != nil {
+		return nil, err
+	}
+	return anns, nil
+}
+
 // ListRecordings returns all stored recordings (GET /recordings).
 func (c *Client) ListRecordings(ctx context.Context) ([]RecordingInfo, error) {
 	var list []RecordingInfo
@@ -293,6 +427,13 @@ func (c *Client) GetRecordingInfo(ctx context.Context, name string) (*RecordingI
 		return nil, err
 	}
 	return &info, nil
+}
+
+// RecordingScreenshot extracts a JPEG frame from a saved recording
+// (GET /recordings/{name}/screenshot?t=N&quality=N). Returns the raw JPEG bytes.
+func (c *Client) RecordingScreenshot(ctx context.Context, name string, timeOffset float64, quality int) ([]byte, error) {
+	path := fmt.Sprintf("/recordings/%s/screenshot?t=%.3f&quality=%d", name, timeOffset, quality)
+	return c.doRawGet(ctx, path)
 }
 
 // DownloadRecording streams the MP4 for the named recording into w
@@ -363,15 +504,16 @@ func (c *Client) EnsureRecording(ctx context.Context, name string) (*RecordingSt
 }
 
 // CreateCompositionAndWait creates a composition and polls until it completes,
-// fails, or the timeout elapses. If the composition already exists (409), it
-// falls through to polling the existing one.
+// fails, or the timeout elapses. If the composition already exists (409) or
+// was accepted for async processing (202), it falls through to polling.
 func (c *Client) CreateCompositionAndWait(ctx context.Context, req CompositionRequest, timeout time.Duration) (*CompositionStatus, error) {
 	_, err := c.CreateComposition(ctx, req)
 	if err != nil {
-		if !IsConflict(err) {
+		if !IsConflict(err) && !IsAccepted(err) {
 			return nil, err
 		}
-		// Composition already exists — poll it.
+		// 409 Conflict: composition already exists — poll it.
+		// 202 Accepted: composition created asynchronously — poll it.
 	}
 	return c.WaitForComposition(ctx, req.Name, timeout)
 }
@@ -499,6 +641,41 @@ func (c *Client) WaitForComposition(ctx context.Context, name string, timeout ti
 }
 
 // ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
+
+// Events returns the event log for the current session (GET /events).
+// An optional since value filters to events with elapsed greater than that value.
+func (c *Client) Events(ctx context.Context, since ...float64) ([]Event, error) {
+	urlPath := "/events"
+	if len(since) > 0 {
+		urlPath = fmt.Sprintf("/events?since=%g", since[0])
+	}
+	var events []Event
+	// Events endpoint may have query params, use doRawGet + decode.
+	if len(since) > 0 {
+		data, err := c.doRawGet(ctx, urlPath)
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(data, &events); err != nil {
+			return nil, err
+		}
+		return events, nil
+	}
+	if err := c.doJSON(ctx, http.MethodGet, urlPath, nil, http.StatusOK, &events); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+// DashboardURL returns the URL for the HTML dashboard page. No HTTP call
+// is made.
+func (c *Client) DashboardURL() string {
+	return c.baseURL + "/dashboard"
+}
+
+// ---------------------------------------------------------------------------
 // Layout validation / Testcard
 // ---------------------------------------------------------------------------
 
@@ -581,8 +758,176 @@ func (c *Client) WaitUntilReady(ctx context.Context, timeout time.Duration) erro
 }
 
 // ---------------------------------------------------------------------------
+// Director — Mouse
+// ---------------------------------------------------------------------------
+
+// MouseMove moves the mouse cursor (POST /director/mouse/move).
+func (c *Client) MouseMove(ctx context.Context, req MouseMoveRequest) error {
+	return c.doSimple(ctx, http.MethodPost, "/director/mouse/move", req, http.StatusOK)
+}
+
+// MouseClick clicks the mouse (POST /director/mouse/click).
+func (c *Client) MouseClick(ctx context.Context, req MouseClickRequest) error {
+	if req.Button == 0 {
+		req.Button = 1
+	}
+	return c.doSimple(ctx, http.MethodPost, "/director/mouse/click", req, http.StatusOK)
+}
+
+// MouseDoubleClick double-clicks the mouse (POST /director/mouse/double-click).
+func (c *Client) MouseDoubleClick(ctx context.Context, x, y *int) error {
+	body := map[string]any{}
+	if x != nil {
+		body["x"] = *x
+	}
+	if y != nil {
+		body["y"] = *y
+	}
+	return c.doSimple(ctx, http.MethodPost, "/director/mouse/double-click", body, http.StatusOK)
+}
+
+// MouseRightClick right-clicks the mouse (POST /director/mouse/right-click).
+func (c *Client) MouseRightClick(ctx context.Context, x, y *int) error {
+	body := map[string]any{}
+	if x != nil {
+		body["x"] = *x
+	}
+	if y != nil {
+		body["y"] = *y
+	}
+	return c.doSimple(ctx, http.MethodPost, "/director/mouse/right-click", body, http.StatusOK)
+}
+
+// MouseDrag drags from one point to another (POST /director/mouse/drag).
+func (c *Client) MouseDrag(ctx context.Context, req MouseDragRequest) error {
+	if req.Button == 0 {
+		req.Button = 1
+	}
+	return c.doSimple(ctx, http.MethodPost, "/director/mouse/drag", req, http.StatusOK)
+}
+
+// MouseScroll scrolls the mouse wheel (POST /director/mouse/scroll).
+func (c *Client) MouseScroll(ctx context.Context, req MouseScrollRequest) error {
+	return c.doSimple(ctx, http.MethodPost, "/director/mouse/scroll", req, http.StatusOK)
+}
+
+// MousePosition returns the current cursor position
+// (GET /director/mouse/position).
+func (c *Client) MousePosition(ctx context.Context) (*MousePos, error) {
+	var pos MousePos
+	if err := c.doJSON(ctx, http.MethodGet, "/director/mouse/position", nil, http.StatusOK, &pos); err != nil {
+		return nil, err
+	}
+	return &pos, nil
+}
+
+// ---------------------------------------------------------------------------
+// Director — Keyboard
+// ---------------------------------------------------------------------------
+
+// KeyboardType types text with human-like rhythm
+// (POST /director/keyboard/type).
+func (c *Client) KeyboardType(ctx context.Context, req KeyboardTypeRequest) error {
+	return c.doSimple(ctx, http.MethodPost, "/director/keyboard/type", req, http.StatusOK)
+}
+
+// KeyboardPress presses one or more keys (POST /director/keyboard/press).
+func (c *Client) KeyboardPress(ctx context.Context, keys ...string) error {
+	body := map[string]any{"keys": keys}
+	return c.doSimple(ctx, http.MethodPost, "/director/keyboard/press", body, http.StatusOK)
+}
+
+// KeyboardHold holds a key down (POST /director/keyboard/hold).
+func (c *Client) KeyboardHold(ctx context.Context, key string) error {
+	body := map[string]any{"key": key}
+	return c.doSimple(ctx, http.MethodPost, "/director/keyboard/hold", body, http.StatusOK)
+}
+
+// KeyboardRelease releases a held key (POST /director/keyboard/release).
+func (c *Client) KeyboardRelease(ctx context.Context, key string) error {
+	body := map[string]any{"key": key}
+	return c.doSimple(ctx, http.MethodPost, "/director/keyboard/release", body, http.StatusOK)
+}
+
+// ---------------------------------------------------------------------------
+// Director — Window
+// ---------------------------------------------------------------------------
+
+// WindowFind finds a window by name or WM_CLASS
+// (POST /director/window/find).
+func (c *Client) WindowFind(ctx context.Context, req WindowFindRequest) (*WindowInfo, error) {
+	if req.Timeout == 0 {
+		req.Timeout = 10.0
+	}
+	var info WindowInfo
+	if err := c.doJSON(ctx, http.MethodPost, "/director/window/find", req, http.StatusOK, &info); err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
+// WindowFocus focuses a window (POST /director/window/{id}/focus).
+func (c *Client) WindowFocus(ctx context.Context, windowID string) error {
+	return c.doSimple(ctx, http.MethodPost, "/director/window/"+windowID+"/focus", nil, http.StatusOK)
+}
+
+// WindowMove moves a window (POST /director/window/{id}/move).
+func (c *Client) WindowMove(ctx context.Context, windowID string, x, y int) error {
+	body := map[string]any{"x": x, "y": y}
+	return c.doSimple(ctx, http.MethodPost, "/director/window/"+windowID+"/move", body, http.StatusOK)
+}
+
+// WindowResize resizes a window (POST /director/window/{id}/resize).
+func (c *Client) WindowResize(ctx context.Context, windowID string, width, height int) error {
+	body := map[string]any{"width": width, "height": height}
+	return c.doSimple(ctx, http.MethodPost, "/director/window/"+windowID+"/resize", body, http.StatusOK)
+}
+
+// WindowMinimize minimizes a window (POST /director/window/{id}/minimize).
+func (c *Client) WindowMinimize(ctx context.Context, windowID string) error {
+	return c.doSimple(ctx, http.MethodPost, "/director/window/"+windowID+"/minimize", nil, http.StatusOK)
+}
+
+// WindowGeometry returns the geometry of a window
+// (GET /director/window/{id}/geometry).
+func (c *Client) WindowGeometry(ctx context.Context, windowID string) (*WindowGeometryInfo, error) {
+	var geo WindowGeometryInfo
+	if err := c.doJSON(ctx, http.MethodGet, "/director/window/"+windowID+"/geometry", nil, http.StatusOK, &geo); err != nil {
+		return nil, err
+	}
+	return &geo, nil
+}
+
+// WindowTile tiles windows (POST /director/window/tile).
+func (c *Client) WindowTile(ctx context.Context, req WindowTileRequest) error {
+	return c.doSimple(ctx, http.MethodPost, "/director/window/tile", req, http.StatusOK)
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+// doRawGet performs a GET request and returns the raw response bytes. It
+// constructs the URL directly (no path.Clean) so query strings are preserved.
+func (c *Client) doRawGet(ctx context.Context, rawPath string) ([]byte, error) {
+	if err := c.ensureReady(ctx); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+rawPath, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, &RecorderError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(b)}
+	}
+	return io.ReadAll(resp.Body)
+}
 
 func (c *Client) doSimple(ctx context.Context, method, urlPath string, body any, wantStatus int) error {
 	resp, err := c.doRequest(ctx, method, urlPath, body)

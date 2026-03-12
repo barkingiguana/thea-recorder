@@ -107,6 +107,42 @@ export interface CreateCompositionRequest {
   highlight_width?: number;
 }
 
+/** An annotation on a recording. */
+export interface Annotation {
+  label: string;
+  time: number;
+  details?: string;
+}
+
+/** An event from the event log. */
+export interface Event {
+  event: string;
+  time: string;
+  elapsed: number;
+  details?: Record<string, unknown>;
+}
+
+/** Window information returned by windowFind. */
+export interface WindowInfo {
+  window_id: string;
+  name?: string;
+  class?: string;
+}
+
+/** Window geometry returned by windowGeometry. */
+export interface WindowGeometry {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Mouse position returned by mousePosition. */
+export interface MousePosition {
+  x: number;
+  y: number;
+}
+
 /** Response from composition endpoints. */
 export interface CompositionStatus {
   name: string;
@@ -265,6 +301,27 @@ export class RecorderClient {
     await this.request("POST", "/display/stop");
   }
 
+  /** Capture a JPEG screenshot of the live display (GET /display/screenshot). */
+  async displayScreenshot(quality = 80): Promise<Buffer> {
+    const res = await this.request(
+      "GET",
+      `/display/screenshot?quality=${quality}`,
+      undefined,
+      true,
+    );
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  /** Return the URL for the live MJPEG stream (no HTTP call). */
+  displayStreamUrl(fps = 5): string {
+    return `${this.baseUrl}/display/stream?fps=${fps}`;
+  }
+
+  /** Return the URL for the HTML live viewer page (no HTTP call). */
+  displayViewerUrl(): string {
+    return `${this.baseUrl}/display/view`;
+  }
+
   // -----------------------------------------------------------------------
   // Panels
   // -----------------------------------------------------------------------
@@ -311,6 +368,22 @@ export class RecorderClient {
   /** Get recording status (GET /recording/status). */
   async recordingStatus(): Promise<RecordingStatusResponse> {
     return this.request<RecordingStatusResponse>("GET", "/recording/status");
+  }
+
+  /** Add an annotation to the active recording (POST /recording/annotations). */
+  async addAnnotation(
+    label: string,
+    options?: { time?: number; details?: string },
+  ): Promise<Annotation> {
+    const body: Record<string, unknown> = { label };
+    if (options?.time !== undefined) body.time = options.time;
+    if (options?.details !== undefined) body.details = options.details;
+    return this.request<Annotation>("POST", "/recording/annotations", body);
+  }
+
+  /** List annotations for the active recording (GET /recording/annotations). */
+  async listAnnotations(): Promise<Annotation[]> {
+    return this.request<Annotation[]>("GET", "/recording/annotations");
   }
 
   // -----------------------------------------------------------------------
@@ -363,6 +436,37 @@ export class RecorderClient {
       "GET",
       `/recordings/${encodeURIComponent(name)}/info`,
     );
+  }
+
+  /** Extract a JPEG frame from a saved recording (GET /recordings/{name}/screenshot). */
+  async recordingScreenshot(
+    name: string,
+    timeOffset: number,
+    quality = 80,
+  ): Promise<Buffer> {
+    const params = `?t=${timeOffset.toFixed(3)}&quality=${quality}`;
+    const res = await this.request(
+      "GET",
+      `/recordings/${encodeURIComponent(name)}/screenshot${params}`,
+      undefined,
+      true,
+    );
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  // -----------------------------------------------------------------------
+  // Events
+  // -----------------------------------------------------------------------
+
+  /** Return the event log for the current session (GET /events). */
+  async events(since?: number): Promise<Event[]> {
+    const path = since !== undefined ? `/events?since=${since}` : "/events";
+    return this.request<Event[]>("GET", path);
+  }
+
+  /** Return the URL for the HTML dashboard page (no HTTP call). */
+  dashboardUrl(): string {
+    return `${this.baseUrl}/dashboard`;
   }
 
   // -----------------------------------------------------------------------
@@ -472,6 +576,186 @@ export class RecorderClient {
     throw new RecorderError(
       `Composition "${name}" not ready after ${timeout}ms`,
     );
+  }
+
+  // -----------------------------------------------------------------------
+  // Director — Mouse
+  // -----------------------------------------------------------------------
+
+  /** Move the mouse cursor (POST /director/mouse/move). */
+  async mouseMove(
+    x: number,
+    y: number,
+    options?: { duration?: number; targetWidth?: number },
+  ): Promise<void> {
+    const body: Record<string, unknown> = { x, y };
+    if (options?.duration !== undefined) body.duration = options.duration;
+    if (options?.targetWidth !== undefined) body.target_width = options.targetWidth;
+    await this.request("POST", "/director/mouse/move", body);
+  }
+
+  /** Click the mouse (POST /director/mouse/click). */
+  async mouseClick(options?: {
+    x?: number;
+    y?: number;
+    button?: number;
+    duration?: number;
+  }): Promise<void> {
+    const body: Record<string, unknown> = {};
+    if (options?.x !== undefined) body.x = options.x;
+    if (options?.y !== undefined) body.y = options.y;
+    if (options?.button !== undefined) body.button = options.button;
+    if (options?.duration !== undefined) body.duration = options.duration;
+    await this.request("POST", "/director/mouse/click", body);
+  }
+
+  /** Double-click the mouse (POST /director/mouse/double-click). */
+  async mouseDoubleClick(x?: number, y?: number): Promise<void> {
+    const body: Record<string, unknown> = {};
+    if (x !== undefined) body.x = x;
+    if (y !== undefined) body.y = y;
+    await this.request("POST", "/director/mouse/double-click", body);
+  }
+
+  /** Right-click the mouse (POST /director/mouse/right-click). */
+  async mouseRightClick(x?: number, y?: number): Promise<void> {
+    const body: Record<string, unknown> = {};
+    if (x !== undefined) body.x = x;
+    if (y !== undefined) body.y = y;
+    await this.request("POST", "/director/mouse/right-click", body);
+  }
+
+  /** Drag from one point to another (POST /director/mouse/drag). */
+  async mouseDrag(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    options?: { button?: number; duration?: number },
+  ): Promise<void> {
+    const body: Record<string, unknown> = {
+      start_x: startX,
+      start_y: startY,
+      end_x: endX,
+      end_y: endY,
+    };
+    if (options?.button !== undefined) body.button = options.button;
+    if (options?.duration !== undefined) body.duration = options.duration;
+    await this.request("POST", "/director/mouse/drag", body);
+  }
+
+  /** Scroll the mouse wheel (POST /director/mouse/scroll). */
+  async mouseScroll(clicks: number, x?: number, y?: number): Promise<void> {
+    const body: Record<string, unknown> = { clicks };
+    if (x !== undefined) body.x = x;
+    if (y !== undefined) body.y = y;
+    await this.request("POST", "/director/mouse/scroll", body);
+  }
+
+  /** Get cursor position (GET /director/mouse/position). */
+  async mousePosition(): Promise<MousePosition> {
+    return this.request<MousePosition>("GET", "/director/mouse/position");
+  }
+
+  // -----------------------------------------------------------------------
+  // Director — Keyboard
+  // -----------------------------------------------------------------------
+
+  /** Type text with human-like rhythm (POST /director/keyboard/type). */
+  async keyboardType(text: string, wpm?: number): Promise<void> {
+    const body: Record<string, unknown> = { text };
+    if (wpm !== undefined) body.wpm = wpm;
+    await this.request("POST", "/director/keyboard/type", body);
+  }
+
+  /** Press key(s) (POST /director/keyboard/press). */
+  async keyboardPress(...keys: string[]): Promise<void> {
+    await this.request("POST", "/director/keyboard/press", { keys });
+  }
+
+  /** Hold a key down (POST /director/keyboard/hold). */
+  async keyboardHold(key: string): Promise<void> {
+    await this.request("POST", "/director/keyboard/hold", { key });
+  }
+
+  /** Release a held key (POST /director/keyboard/release). */
+  async keyboardRelease(key: string): Promise<void> {
+    await this.request("POST", "/director/keyboard/release", { key });
+  }
+
+  // -----------------------------------------------------------------------
+  // Director — Window
+  // -----------------------------------------------------------------------
+
+  /** Find a window by name or WM_CLASS (POST /director/window/find). */
+  async windowFind(options: {
+    name?: string;
+    className?: string;
+    timeout?: number;
+  }): Promise<WindowInfo> {
+    const body: Record<string, unknown> = {};
+    if (options.name !== undefined) body.name = options.name;
+    if (options.className !== undefined) body.class = options.className;
+    if (options.timeout !== undefined) body.timeout = options.timeout;
+    return this.request<WindowInfo>("POST", "/director/window/find", body);
+  }
+
+  /** Focus a window (POST /director/window/{id}/focus). */
+  async windowFocus(windowId: string): Promise<void> {
+    await this.request(
+      "POST",
+      `/director/window/${encodeURIComponent(windowId)}/focus`,
+    );
+  }
+
+  /** Move a window (POST /director/window/{id}/move). */
+  async windowMove(windowId: string, x: number, y: number): Promise<void> {
+    await this.request(
+      "POST",
+      `/director/window/${encodeURIComponent(windowId)}/move`,
+      { x, y },
+    );
+  }
+
+  /** Resize a window (POST /director/window/{id}/resize). */
+  async windowResize(
+    windowId: string,
+    width: number,
+    height: number,
+  ): Promise<void> {
+    await this.request(
+      "POST",
+      `/director/window/${encodeURIComponent(windowId)}/resize`,
+      { width, height },
+    );
+  }
+
+  /** Minimize a window (POST /director/window/{id}/minimize). */
+  async windowMinimize(windowId: string): Promise<void> {
+    await this.request(
+      "POST",
+      `/director/window/${encodeURIComponent(windowId)}/minimize`,
+    );
+  }
+
+  /** Get window geometry (GET /director/window/{id}/geometry). */
+  async windowGeometry(windowId: string): Promise<WindowGeometry> {
+    return this.request<WindowGeometry>(
+      "GET",
+      `/director/window/${encodeURIComponent(windowId)}/geometry`,
+    );
+  }
+
+  /** Tile windows (POST /director/window/tile). */
+  async windowTile(
+    windowIds: string[],
+    layout?: string,
+    bounds?: number[],
+  ): Promise<void> {
+    const body: Record<string, unknown> = { window_ids: windowIds };
+    if (layout !== undefined) body.layout = layout;
+    if (bounds !== undefined) body.bounds = bounds;
+    await this.request("POST", "/director/window/tile", body);
   }
 
   // -----------------------------------------------------------------------
