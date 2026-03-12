@@ -71,7 +71,7 @@ class Director:
             return  # WM already running
 
         self._wm_proc = subprocess.Popen(
-            ["openbox", "--config-file", "/dev/null"],
+            ["openbox"],
             env=self._env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
