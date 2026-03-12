@@ -92,6 +92,35 @@ public class RecorderClient implements AutoCloseable {
         post("/display/stop", "", 200);
     }
 
+    /**
+     * Captures a JPEG screenshot of the live display.
+     *
+     * @param quality JPEG quality (1-100)
+     * @return JPEG image data
+     */
+    public byte[] displayScreenshot(int quality) {
+        return getRaw("/display/screenshot?quality=" + quality, 200);
+    }
+
+    /**
+     * Returns the URL for the live MJPEG stream.
+     *
+     * @param fps frames per second for the stream (1-15)
+     * @return full URL to the MJPEG stream endpoint
+     */
+    public String displayStreamUrl(int fps) {
+        return baseUrl + "/display/stream?fps=" + fps;
+    }
+
+    /**
+     * Returns the URL for the HTML live viewer page.
+     *
+     * @return full URL to the viewer page
+     */
+    public String displayViewerUrl() {
+        return baseUrl + "/display/view";
+    }
+
     // ── Panels ───────────────────────────────────────────────────────────
 
     /**
@@ -246,6 +275,39 @@ public class RecorderClient implements AutoCloseable {
         return stopRecording();
     }
 
+    // ── Annotations ─────────────────────────────────────────────────────
+
+    /**
+     * Adds an annotation to the active recording.
+     *
+     * @param label   short label for the annotation
+     * @param time    time offset in seconds (null to use current elapsed time)
+     * @param details optional longer description (null to omit)
+     * @return the created annotation as a map
+     */
+    public Map<String, Object> addAnnotation(String label, Double time, String details) {
+        var fields = new LinkedHashMap<String, String>();
+        fields.put("label", jsonString(label));
+        if (time != null) {
+            fields.put("time", String.valueOf(time));
+        }
+        if (details != null) {
+            fields.put("details", jsonString(details));
+        }
+        var json = post("/recording/annotations", jsonObject(fields), 201);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Lists annotations for the active recording.
+     *
+     * @return list of annotation maps
+     */
+    public List<Map<String, Object>> listAnnotations() {
+        var json = get("/recording/annotations", 200);
+        return parseJsonArray(json);
+    }
+
     // ── Recordings ───────────────────────────────────────────────────────
 
     /**
@@ -318,6 +380,45 @@ public class RecorderClient implements AutoCloseable {
     public RecordingInfo recordingInfo(String name) {
         var json = get("/recordings/" + encode(name) + "/info", 200);
         return parseRecordingInfo(json);
+    }
+
+    /**
+     * Extracts a JPEG frame from a saved recording.
+     *
+     * @param name       recording name
+     * @param timeOffset time offset in seconds into the video
+     * @param quality    JPEG quality (1-100)
+     * @return JPEG image data
+     */
+    public byte[] recordingScreenshot(String name, double timeOffset, int quality) {
+        var params = "?t=" + String.format("%.3f", timeOffset) + "&quality=" + quality;
+        return getRaw("/recordings/" + encode(name) + "/screenshot" + params, 200);
+    }
+
+    // ── Events ──────────────────────────────────────────────────────────
+
+    /**
+     * Returns the event log for the current session.
+     *
+     * @param since only return events with elapsed greater than this value (null for all)
+     * @return list of event maps
+     */
+    public List<Map<String, Object>> events(Double since) {
+        var path = "/events";
+        if (since != null) {
+            path = "/events?since=" + since;
+        }
+        var json = get(path, 200);
+        return parseJsonArray(json);
+    }
+
+    /**
+     * Returns the URL for the HTML dashboard page.
+     *
+     * @return full URL to the dashboard
+     */
+    public String dashboardUrl() {
+        return baseUrl + "/dashboard";
     }
 
     // ── Sessions ─────────────────────────────────────────────────────────
@@ -510,6 +611,330 @@ public class RecorderClient implements AutoCloseable {
         throw new RecorderError("Composition not ready after " + timeoutMs + "ms");
     }
 
+    // ── Director — Mouse ──────────────────────────────────────────────
+
+    /**
+     * Moves the mouse cursor.
+     *
+     * @param x           target X coordinate
+     * @param y           target Y coordinate
+     * @param duration    movement duration in seconds (null for default)
+     * @param targetWidth target width for Fitts's Law (null for default)
+     * @return response map
+     */
+    public Map<String, Object> mouseMove(int x, int y, Double duration, Double targetWidth) {
+        var fields = new LinkedHashMap<String, String>();
+        fields.put("x", String.valueOf(x));
+        fields.put("y", String.valueOf(y));
+        if (duration != null) {
+            fields.put("duration", String.valueOf(duration));
+        }
+        if (targetWidth != null) {
+            fields.put("target_width", String.valueOf(targetWidth));
+        }
+        var json = post("/director/mouse/move", jsonObject(fields), 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Clicks the mouse.
+     *
+     * @param x        X coordinate (null to click at current position)
+     * @param y        Y coordinate (null to click at current position)
+     * @param button   mouse button (1=left, 2=middle, 3=right)
+     * @param duration movement duration in seconds (null for default)
+     * @return response map
+     */
+    public Map<String, Object> mouseClick(Integer x, Integer y, int button, Double duration) {
+        var fields = new LinkedHashMap<String, String>();
+        if (x != null) {
+            fields.put("x", String.valueOf(x));
+        }
+        if (y != null) {
+            fields.put("y", String.valueOf(y));
+        }
+        fields.put("button", String.valueOf(button));
+        if (duration != null) {
+            fields.put("duration", String.valueOf(duration));
+        }
+        var json = post("/director/mouse/click", jsonObject(fields), 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Double-clicks the mouse.
+     *
+     * @param x X coordinate (null to click at current position)
+     * @param y Y coordinate (null to click at current position)
+     * @return response map
+     */
+    public Map<String, Object> mouseDoubleClick(Integer x, Integer y) {
+        var fields = new LinkedHashMap<String, String>();
+        if (x != null) {
+            fields.put("x", String.valueOf(x));
+        }
+        if (y != null) {
+            fields.put("y", String.valueOf(y));
+        }
+        var json = post("/director/mouse/double-click", jsonObject(fields), 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Right-clicks the mouse.
+     *
+     * @param x X coordinate (null to click at current position)
+     * @param y Y coordinate (null to click at current position)
+     * @return response map
+     */
+    public Map<String, Object> mouseRightClick(Integer x, Integer y) {
+        var fields = new LinkedHashMap<String, String>();
+        if (x != null) {
+            fields.put("x", String.valueOf(x));
+        }
+        if (y != null) {
+            fields.put("y", String.valueOf(y));
+        }
+        var json = post("/director/mouse/right-click", jsonObject(fields), 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Drags from one point to another.
+     *
+     * @param startX   start X coordinate
+     * @param startY   start Y coordinate
+     * @param endX     end X coordinate
+     * @param endY     end Y coordinate
+     * @param button   mouse button (1=left, 2=middle, 3=right)
+     * @param duration movement duration in seconds (null for default)
+     * @return response map
+     */
+    public Map<String, Object> mouseDrag(int startX, int startY, int endX, int endY, int button, Double duration) {
+        var fields = new LinkedHashMap<String, String>();
+        fields.put("start_x", String.valueOf(startX));
+        fields.put("start_y", String.valueOf(startY));
+        fields.put("end_x", String.valueOf(endX));
+        fields.put("end_y", String.valueOf(endY));
+        fields.put("button", String.valueOf(button));
+        if (duration != null) {
+            fields.put("duration", String.valueOf(duration));
+        }
+        var json = post("/director/mouse/drag", jsonObject(fields), 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Scrolls the mouse wheel.
+     *
+     * @param clicks number of scroll clicks (positive=up, negative=down)
+     * @param x      X coordinate (null for current position)
+     * @param y      Y coordinate (null for current position)
+     * @return response map
+     */
+    public Map<String, Object> mouseScroll(int clicks, Integer x, Integer y) {
+        var fields = new LinkedHashMap<String, String>();
+        fields.put("clicks", String.valueOf(clicks));
+        if (x != null) {
+            fields.put("x", String.valueOf(x));
+        }
+        if (y != null) {
+            fields.put("y", String.valueOf(y));
+        }
+        var json = post("/director/mouse/scroll", jsonObject(fields), 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Gets the current mouse cursor position.
+     *
+     * @return map with "x" and "y" keys
+     */
+    public Map<String, Object> mousePosition() {
+        var json = get("/director/mouse/position", 200);
+        return parseJsonObject(json);
+    }
+
+    // ── Director — Keyboard ────────────────────────────────────────────
+
+    /**
+     * Types text with human-like rhythm.
+     *
+     * @param text text to type
+     * @param wpm  words per minute (null for default)
+     * @return response map
+     */
+    public Map<String, Object> keyboardType(String text, Double wpm) {
+        var fields = new LinkedHashMap<String, String>();
+        fields.put("text", jsonString(text));
+        if (wpm != null) {
+            fields.put("wpm", String.valueOf(wpm));
+        }
+        var json = post("/director/keyboard/type", jsonObject(fields), 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Presses one or more keys.
+     *
+     * @param keys key names to press
+     * @return response map
+     */
+    public Map<String, Object> keyboardPress(String... keys) {
+        var keysArray = new StringBuilder("[");
+        for (int i = 0; i < keys.length; i++) {
+            if (i > 0) keysArray.append(",");
+            keysArray.append(jsonString(keys[i]));
+        }
+        keysArray.append("]");
+        var body = "{\"keys\":" + keysArray + "}";
+        var json = post("/director/keyboard/press", body, 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Holds a key down.
+     *
+     * @param key key name to hold
+     * @return response map
+     */
+    public Map<String, Object> keyboardHold(String key) {
+        var body = jsonObject(Map.of("key", jsonString(key)));
+        var json = post("/director/keyboard/hold", body, 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Releases a held key.
+     *
+     * @param key key name to release
+     * @return response map
+     */
+    public Map<String, Object> keyboardRelease(String key) {
+        var body = jsonObject(Map.of("key", jsonString(key)));
+        var json = post("/director/keyboard/release", body, 200);
+        return parseJsonObject(json);
+    }
+
+    // ── Director — Window ──────────────────────────────────────────────
+
+    /**
+     * Finds a window by name or WM_CLASS.
+     *
+     * @param name      window name (null to search by class only)
+     * @param className WM_CLASS (null to search by name only)
+     * @param timeout   search timeout in seconds
+     * @return map with "window_id" key
+     */
+    public Map<String, Object> windowFind(String name, String className, double timeout) {
+        var fields = new LinkedHashMap<String, String>();
+        if (name != null) {
+            fields.put("name", jsonString(name));
+        }
+        if (className != null) {
+            fields.put("class", jsonString(className));
+        }
+        fields.put("timeout", String.valueOf(timeout));
+        var json = post("/director/window/find", jsonObject(fields), 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Focuses a window.
+     *
+     * @param windowId X11 window ID
+     * @return response map
+     */
+    public Map<String, Object> windowFocus(String windowId) {
+        var json = post("/director/window/" + encode(windowId) + "/focus", "", 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Moves a window.
+     *
+     * @param windowId X11 window ID
+     * @param x        target X coordinate
+     * @param y        target Y coordinate
+     * @return response map
+     */
+    public Map<String, Object> windowMove(String windowId, int x, int y) {
+        var body = jsonObject(new LinkedHashMap<>(Map.of(
+                "x", String.valueOf(x),
+                "y", String.valueOf(y)
+        )));
+        var json = post("/director/window/" + encode(windowId) + "/move", body, 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Resizes a window.
+     *
+     * @param windowId X11 window ID
+     * @param width    target width
+     * @param height   target height
+     * @return response map
+     */
+    public Map<String, Object> windowResize(String windowId, int width, int height) {
+        var body = jsonObject(new LinkedHashMap<>(Map.of(
+                "width", String.valueOf(width),
+                "height", String.valueOf(height)
+        )));
+        var json = post("/director/window/" + encode(windowId) + "/resize", body, 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Minimizes a window.
+     *
+     * @param windowId X11 window ID
+     * @return response map
+     */
+    public Map<String, Object> windowMinimize(String windowId) {
+        var json = post("/director/window/" + encode(windowId) + "/minimize", "", 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Gets window geometry.
+     *
+     * @param windowId X11 window ID
+     * @return map with "x", "y", "width", "height" keys
+     */
+    public Map<String, Object> windowGeometry(String windowId) {
+        var json = get("/director/window/" + encode(windowId) + "/geometry", 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Tiles windows in a layout.
+     *
+     * @param windowIds list of X11 window IDs
+     * @param layout    layout type (e.g. "side-by-side")
+     * @param bounds    optional bounding box [x, y, width, height] (null for display size)
+     * @return response map
+     */
+    public Map<String, Object> windowTile(List<String> windowIds, String layout, int[] bounds) {
+        var idsArray = new StringBuilder("[");
+        for (int i = 0; i < windowIds.size(); i++) {
+            if (i > 0) idsArray.append(",");
+            idsArray.append(jsonString(windowIds.get(i)));
+        }
+        idsArray.append("]");
+        var body = new StringBuilder("{\"window_ids\":").append(idsArray)
+                .append(",\"layout\":").append(jsonString(layout));
+        if (bounds != null) {
+            body.append(",\"bounds\":[")
+                    .append(bounds[0]).append(",")
+                    .append(bounds[1]).append(",")
+                    .append(bounds[2]).append(",")
+                    .append(bounds[3]).append("]");
+        }
+        body.append("}");
+        var json = post("/director/window/tile", body.toString(), 200);
+        return parseJsonObject(json);
+    }
+
     // ── Layout & Diagnostics ────────────────────────────────────────────
 
     /**
@@ -621,6 +1046,27 @@ public class RecorderClient implements AutoCloseable {
     private void delete(String path, int expectedStatus) {
         var request = newRequest(path).DELETE().build();
         send(request, expectedStatus);
+    }
+
+    private byte[] getRaw(String path, int expectedStatus) {
+        ensureReady(path);
+        var request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + path))
+                .timeout(timeout)
+                .GET()
+                .build();
+        try {
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() != expectedStatus) {
+                throw new RecorderError(response.statusCode(),
+                        "HTTP %d from GET %s".formatted(response.statusCode(), path));
+            }
+            return response.body();
+        } catch (RecorderError e) {
+            throw e;
+        } catch (IOException | InterruptedException e) {
+            throw new RecorderError("Request failed: GET " + path, e);
+        }
     }
 
     private synchronized void ensureReady(String path) {
@@ -915,6 +1361,110 @@ public class RecorderClient implements AutoCloseable {
                 jsonValue(json, "output_path"),
                 jsonValue(json, "error")
         );
+    }
+
+    /**
+     * Parses a flat JSON object into a Map. Values are strings, numbers, or booleans.
+     */
+    private Map<String, Object> parseJsonObject(String json) {
+        var result = new LinkedHashMap<String, Object>();
+        if (json == null || json.isBlank()) return result;
+        json = json.strip();
+        if (!json.startsWith("{") || !json.endsWith("}")) return result;
+        // Extract keys by scanning for "key": patterns
+        int idx = 1; // skip opening brace
+        while (idx < json.length() - 1) {
+            // skip whitespace
+            while (idx < json.length() && Character.isWhitespace(json.charAt(idx))) idx++;
+            if (idx >= json.length() - 1 || json.charAt(idx) == '}') break;
+            if (json.charAt(idx) == ',') { idx++; continue; }
+            // expect a quoted key
+            if (json.charAt(idx) != '"') break;
+            int keyStart = idx + 1;
+            int keyEnd = json.indexOf('"', keyStart);
+            if (keyEnd < 0) break;
+            String key = json.substring(keyStart, keyEnd);
+            idx = keyEnd + 1;
+            // skip colon and whitespace
+            while (idx < json.length() && (json.charAt(idx) == ':' || Character.isWhitespace(json.charAt(idx)))) idx++;
+            if (idx >= json.length()) break;
+            // parse value
+            char ch = json.charAt(idx);
+            if (ch == '"') {
+                // string value
+                int vStart = idx + 1;
+                int vEnd = vStart;
+                while (vEnd < json.length()) {
+                    if (json.charAt(vEnd) == '\\') { vEnd += 2; continue; }
+                    if (json.charAt(vEnd) == '"') break;
+                    vEnd++;
+                }
+                result.put(key, json.substring(vStart, vEnd));
+                idx = vEnd + 1;
+            } else if (ch == 'n' && json.startsWith("null", idx)) {
+                result.put(key, null);
+                idx += 4;
+            } else if (ch == 't' && json.startsWith("true", idx)) {
+                result.put(key, Boolean.TRUE);
+                idx += 4;
+            } else if (ch == 'f' && json.startsWith("false", idx)) {
+                result.put(key, Boolean.FALSE);
+                idx += 5;
+            } else if (ch == '[' || ch == '{') {
+                // skip nested structure
+                char open = ch;
+                char close = (ch == '[') ? ']' : '}';
+                int depth = 1;
+                int sStart = idx;
+                idx++;
+                boolean inStr = false;
+                while (idx < json.length() && depth > 0) {
+                    char c = json.charAt(idx);
+                    if (c == '\\' && inStr) { idx += 2; continue; }
+                    if (c == '"') inStr = !inStr;
+                    else if (!inStr) {
+                        if (c == open) depth++;
+                        else if (c == close) depth--;
+                    }
+                    idx++;
+                }
+                result.put(key, json.substring(sStart, idx));
+            } else {
+                // number
+                int vStart = idx;
+                while (idx < json.length() && json.charAt(idx) != ',' && json.charAt(idx) != '}'
+                        && !Character.isWhitespace(json.charAt(idx))) idx++;
+                String raw = json.substring(vStart, idx);
+                try {
+                    if (raw.contains(".")) {
+                        result.put(key, Double.parseDouble(raw));
+                    } else {
+                        long l = Long.parseLong(raw);
+                        if (l >= Integer.MIN_VALUE && l <= Integer.MAX_VALUE) {
+                            result.put(key, (int) l);
+                        } else {
+                            result.put(key, l);
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    result.put(key, raw);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Parses a JSON array of objects into a List of Maps.
+     */
+    private List<Map<String, Object>> parseJsonArray(String json) {
+        var result = new ArrayList<Map<String, Object>>();
+        if (json == null || json.isBlank()) return result;
+        var elements = jsonArrayElements(json);
+        for (var el : elements) {
+            result.add(parseJsonObject(el));
+        }
+        return result;
     }
 
     private List<RecordingInfo> parseRecordingInfoList(String json) {

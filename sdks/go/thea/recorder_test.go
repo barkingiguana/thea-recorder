@@ -154,6 +154,11 @@ func fakeServer() *httptest.Server {
 	})
 	mux.HandleFunc("/recordings/", func(w http.ResponseWriter, r *http.Request) {
 		rest := strings.TrimPrefix(r.URL.Path, "/recordings/")
+		if strings.Contains(rest, "/screenshot") {
+			w.Header().Set("Content-Type", "image/jpeg")
+			w.Write([]byte("fake-recording-jpeg"))
+			return
+		}
 		if strings.HasSuffix(rest, "/info") {
 			name := strings.TrimSuffix(rest, "/info")
 			json.NewEncoder(w).Encode(thea.RecordingInfo{
@@ -226,6 +231,180 @@ func fakeServer() *httptest.Server {
 			w.WriteHeader(http.StatusOK)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Display screenshot & stream
+	mux.HandleFunc("/display/screenshot", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/jpeg")
+		w.Write([]byte("fake-jpeg-data"))
+	})
+	mux.HandleFunc("/display/stream", func(w http.ResponseWriter, r *http.Request) {
+		// Not actually called in tests, just registered for completeness.
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/display/view", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Annotations
+	var annotations []thea.Annotation
+	var annMu sync.Mutex
+
+	mux.HandleFunc("/recording/annotations", func(w http.ResponseWriter, r *http.Request) {
+		annMu.Lock()
+		defer annMu.Unlock()
+		switch r.Method {
+		case http.MethodPost:
+			var req thea.AddAnnotationRequest
+			json.NewDecoder(r.Body).Decode(&req)
+			ann := thea.Annotation{Label: req.Label, Time: 1.5, Details: req.Details}
+			if req.Time != nil {
+				ann.Time = *req.Time
+			}
+			annotations = append(annotations, ann)
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(ann)
+		case http.MethodGet:
+			if annotations == nil {
+				annotations = []thea.Annotation{}
+			}
+			json.NewEncoder(w).Encode(annotations)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Events
+	mux.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
+		events := []thea.Event{
+			{Event: "display_started", Time: "2025-01-01T00:00:00Z", Elapsed: 0.0, Details: map[string]any{"display": ":99"}},
+			{Event: "recording_started", Time: "2025-01-01T00:00:01Z", Elapsed: 1.0},
+		}
+		sinceStr := r.URL.Query().Get("since")
+		if sinceStr != "" {
+			// Simple filter: return only the second event.
+			events = events[1:]
+		}
+		json.NewEncoder(w).Encode(events)
+	})
+
+	// Director — Mouse
+	mux.HandleFunc("/director/mouse/move", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/director/mouse/click", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/director/mouse/double-click", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/director/mouse/right-click", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/director/mouse/drag", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/director/mouse/scroll", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/director/mouse/position", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(thea.MousePos{X: 100, Y: 200})
+	})
+
+	// Director — Keyboard
+	mux.HandleFunc("/director/keyboard/type", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/director/keyboard/press", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/director/keyboard/hold", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/director/keyboard/release", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Director — Window
+	mux.HandleFunc("/director/window/find", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		json.NewEncoder(w).Encode(thea.WindowInfo{WindowID: "12345", Name: "xterm", Class: "XTerm"})
+	})
+	mux.HandleFunc("/director/window/tile", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mux.HandleFunc("/director/window/", func(w http.ResponseWriter, r *http.Request) {
+		// Handle /director/window/{id}/focus, /move, /resize, /minimize, /geometry
+		rest := strings.TrimPrefix(r.URL.Path, "/director/window/")
+		parts := strings.SplitN(rest, "/", 2)
+		if len(parts) < 2 {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		action := parts[1]
+		switch action {
+		case "focus", "move", "resize", "minimize":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+		case "geometry":
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			json.NewEncoder(w).Encode(thea.WindowGeometryInfo{X: 0, Y: 0, Width: 1280, Height: 720})
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
 		}
 	})
 
@@ -795,6 +974,408 @@ func TestCreateCompositionAndWait_AlreadyExists(t *testing.T) {
 	}
 	if status.Status != "complete" {
 		t.Fatalf("expected status 'complete', got %q", status.Status)
+	}
+}
+
+func TestCreateCompositionAndWait_Accepted(t *testing.T) {
+	// Server that returns 202 Accepted for composition creation.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+	mux.HandleFunc("/compositions", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			http.Error(w, `{"status":"accepted"}`, http.StatusAccepted)
+			return
+		}
+	})
+	mux.HandleFunc("/compositions/", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(thea.CompositionStatus{
+			Name:   "async-comp",
+			Status: "complete",
+		})
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	c := thea.NewClient(ts.URL)
+	ctx := context.Background()
+
+	req := thea.CompositionRequest{
+		Name:       "async-comp",
+		Recordings: []string{"a", "b"},
+	}
+	status, err := c.CreateCompositionAndWait(ctx, req, 5*time.Second)
+	if err != nil {
+		t.Fatalf("CreateCompositionAndWait with 202: %v", err)
+	}
+	if status.Status != "complete" {
+		t.Fatalf("expected status 'complete', got %q", status.Status)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Display screenshot / URL tests
+// ---------------------------------------------------------------------------
+
+func TestDisplayScreenshot(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	data, err := c.DisplayScreenshot(context.Background(), 80)
+	if err != nil {
+		t.Fatalf("DisplayScreenshot: %v", err)
+	}
+	if string(data) != "fake-jpeg-data" {
+		t.Fatalf("unexpected data: %q", string(data))
+	}
+}
+
+func TestDisplayStreamURL(t *testing.T) {
+	c := thea.NewClient("http://localhost:9123")
+	url := c.DisplayStreamURL(10)
+	want := "http://localhost:9123/display/stream?fps=10"
+	if url != want {
+		t.Fatalf("expected %q, got %q", want, url)
+	}
+}
+
+func TestDisplayViewerURL(t *testing.T) {
+	c := thea.NewClient("http://localhost:9123")
+	url := c.DisplayViewerURL()
+	want := "http://localhost:9123/display/view"
+	if url != want {
+		t.Fatalf("expected %q, got %q", want, url)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Annotation tests
+// ---------------------------------------------------------------------------
+
+func TestAnnotationLifecycle(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+	ctx := context.Background()
+
+	timeVal := 2.5
+	ann, err := c.AddAnnotation(ctx, thea.AddAnnotationRequest{
+		Label:   "step_1",
+		Time:    &timeVal,
+		Details: "first step",
+	})
+	if err != nil {
+		t.Fatalf("AddAnnotation: %v", err)
+	}
+	if ann.Label != "step_1" {
+		t.Fatalf("expected label 'step_1', got %q", ann.Label)
+	}
+	if ann.Time != 2.5 {
+		t.Fatalf("expected time 2.5, got %f", ann.Time)
+	}
+
+	anns, err := c.ListAnnotations(ctx)
+	if err != nil {
+		t.Fatalf("ListAnnotations: %v", err)
+	}
+	if len(anns) != 1 {
+		t.Fatalf("expected 1 annotation, got %d", len(anns))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Events tests
+// ---------------------------------------------------------------------------
+
+func TestEvents(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+	ctx := context.Background()
+
+	events, err := c.Events(ctx)
+	if err != nil {
+		t.Fatalf("Events: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	if events[0].Event != "display_started" {
+		t.Fatalf("expected 'display_started', got %q", events[0].Event)
+	}
+}
+
+func TestEventsSince(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+	ctx := context.Background()
+
+	events, err := c.Events(ctx, 0.5)
+	if err != nil {
+		t.Fatalf("Events(since): %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Event != "recording_started" {
+		t.Fatalf("expected 'recording_started', got %q", events[0].Event)
+	}
+}
+
+func TestDashboardURL(t *testing.T) {
+	c := thea.NewClient("http://localhost:9123")
+	url := c.DashboardURL()
+	want := "http://localhost:9123/dashboard"
+	if url != want {
+		t.Fatalf("expected %q, got %q", want, url)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Recording screenshot tests
+// ---------------------------------------------------------------------------
+
+func TestRecordingScreenshot(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	data, err := c.RecordingScreenshot(context.Background(), "demo", 1.5, 80)
+	if err != nil {
+		t.Fatalf("RecordingScreenshot: %v", err)
+	}
+	if string(data) != "fake-recording-jpeg" {
+		t.Fatalf("unexpected data: %q", string(data))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Director — Mouse tests
+// ---------------------------------------------------------------------------
+
+func TestMouseMove(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.MouseMove(context.Background(), thea.MouseMoveRequest{X: 100, Y: 200})
+	if err != nil {
+		t.Fatalf("MouseMove: %v", err)
+	}
+}
+
+func TestMouseClick(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.MouseClick(context.Background(), thea.MouseClickRequest{Button: 1})
+	if err != nil {
+		t.Fatalf("MouseClick: %v", err)
+	}
+}
+
+func TestMouseDoubleClick(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	x, y := 50, 60
+	err := c.MouseDoubleClick(context.Background(), &x, &y)
+	if err != nil {
+		t.Fatalf("MouseDoubleClick: %v", err)
+	}
+}
+
+func TestMouseRightClick(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.MouseRightClick(context.Background(), nil, nil)
+	if err != nil {
+		t.Fatalf("MouseRightClick: %v", err)
+	}
+}
+
+func TestMouseDrag(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.MouseDrag(context.Background(), thea.MouseDragRequest{
+		StartX: 10, StartY: 20, EndX: 300, EndY: 400,
+	})
+	if err != nil {
+		t.Fatalf("MouseDrag: %v", err)
+	}
+}
+
+func TestMouseScroll(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.MouseScroll(context.Background(), thea.MouseScrollRequest{Clicks: 3})
+	if err != nil {
+		t.Fatalf("MouseScroll: %v", err)
+	}
+}
+
+func TestMousePosition(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	pos, err := c.MousePosition(context.Background())
+	if err != nil {
+		t.Fatalf("MousePosition: %v", err)
+	}
+	if pos.X != 100 || pos.Y != 200 {
+		t.Fatalf("expected (100,200), got (%d,%d)", pos.X, pos.Y)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Director — Keyboard tests
+// ---------------------------------------------------------------------------
+
+func TestKeyboardType(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.KeyboardType(context.Background(), thea.KeyboardTypeRequest{Text: "hello"})
+	if err != nil {
+		t.Fatalf("KeyboardType: %v", err)
+	}
+}
+
+func TestKeyboardPress(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.KeyboardPress(context.Background(), "Return", "Tab")
+	if err != nil {
+		t.Fatalf("KeyboardPress: %v", err)
+	}
+}
+
+func TestKeyboardHold(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.KeyboardHold(context.Background(), "Shift_L")
+	if err != nil {
+		t.Fatalf("KeyboardHold: %v", err)
+	}
+}
+
+func TestKeyboardRelease(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.KeyboardRelease(context.Background(), "Shift_L")
+	if err != nil {
+		t.Fatalf("KeyboardRelease: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Director — Window tests
+// ---------------------------------------------------------------------------
+
+func TestWindowFind(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	info, err := c.WindowFind(context.Background(), thea.WindowFindRequest{Name: "xterm"})
+	if err != nil {
+		t.Fatalf("WindowFind: %v", err)
+	}
+	if info.WindowID != "12345" {
+		t.Fatalf("expected window_id '12345', got %q", info.WindowID)
+	}
+	if info.Name != "xterm" {
+		t.Fatalf("expected name 'xterm', got %q", info.Name)
+	}
+}
+
+func TestWindowFocus(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.WindowFocus(context.Background(), "12345")
+	if err != nil {
+		t.Fatalf("WindowFocus: %v", err)
+	}
+}
+
+func TestWindowMove(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.WindowMove(context.Background(), "12345", 100, 200)
+	if err != nil {
+		t.Fatalf("WindowMove: %v", err)
+	}
+}
+
+func TestWindowResize(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.WindowResize(context.Background(), "12345", 1280, 720)
+	if err != nil {
+		t.Fatalf("WindowResize: %v", err)
+	}
+}
+
+func TestWindowMinimize(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.WindowMinimize(context.Background(), "12345")
+	if err != nil {
+		t.Fatalf("WindowMinimize: %v", err)
+	}
+}
+
+func TestWindowGeometry(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	geo, err := c.WindowGeometry(context.Background(), "12345")
+	if err != nil {
+		t.Fatalf("WindowGeometry: %v", err)
+	}
+	if geo.Width != 1280 || geo.Height != 720 {
+		t.Fatalf("expected 1280x720, got %dx%d", geo.Width, geo.Height)
+	}
+}
+
+func TestWindowTile(t *testing.T) {
+	ts := fakeServer()
+	defer ts.Close()
+	c := newTestClient(ts)
+
+	err := c.WindowTile(context.Background(), thea.WindowTileRequest{
+		WindowIDs: []string{"12345", "67890"},
+		Layout:    "side-by-side",
+	})
+	if err != nil {
+		t.Fatalf("WindowTile: %v", err)
 	}
 }
 

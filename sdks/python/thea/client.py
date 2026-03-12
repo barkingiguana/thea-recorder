@@ -204,6 +204,46 @@ class RecorderClient:
         """POST /display/stop — stop the virtual display."""
         return self._request("POST", "/display/stop")
 
+    def display_screenshot(self, *, quality: int = 80) -> bytes:
+        """GET /display/screenshot — capture a JPEG screenshot of the live display.
+
+        Parameters
+        ----------
+        quality:
+            JPEG quality (1-100, default 80).
+
+        Returns
+        -------
+        bytes
+            JPEG image data.
+        """
+        return self._request_raw("GET", f"/display/screenshot?quality={quality}")
+
+    def display_stream_url(self, *, fps: int = 5) -> str:
+        """Return the URL for the live MJPEG stream.
+
+        Parameters
+        ----------
+        fps:
+            Frames per second for the stream (1-15, default 5).
+
+        Returns
+        -------
+        str
+            Full URL to the MJPEG stream endpoint.
+        """
+        return f"{self.base_url}{self._session_prefix}/display/stream?fps={fps}"
+
+    def display_viewer_url(self) -> str:
+        """Return the URL for the HTML live viewer page.
+
+        Returns
+        -------
+        str
+            Full URL to the viewer page.
+        """
+        return f"{self.base_url}{self._session_prefix}/display/view"
+
     # ------------------------------------------------------------------
     # Panels
     # ------------------------------------------------------------------
@@ -259,6 +299,51 @@ class RecorderClient:
         """GET /recording/status — full recording status."""
         return self._request("GET", "/recording/status")
 
+    def add_annotation(
+        self,
+        label: str,
+        *,
+        time: float | None = None,
+        details: str | None = None,
+    ) -> dict[str, Any]:
+        """POST /recording/annotations — add an annotation to the active recording.
+
+        Parameters
+        ----------
+        label:
+            Short label for the annotation (e.g. ``"login_started"``).
+        time:
+            Time offset in seconds into the recording.  *None* uses the
+            current recording elapsed time.
+        details:
+            Optional longer description.
+
+        Returns
+        -------
+        dict
+            The created annotation with ``label``, ``time``, and
+            optional ``details``.
+        """
+        body: dict[str, Any] = {"label": label}
+        if time is not None:
+            body["time"] = time
+        if details is not None:
+            body["details"] = details
+        return self._request("POST", "/recording/annotations", body)
+
+    def list_annotations(self) -> list[dict[str, Any]]:
+        """GET /recording/annotations — list annotations for the active recording.
+
+        Returns
+        -------
+        list
+            List of annotation dicts.
+        """
+        result = self._request("GET", "/recording/annotations")
+        if isinstance(result, list):
+            return result  # type: ignore[return-value]
+        return []
+
     # ------------------------------------------------------------------
     # Recordings archive
     # ------------------------------------------------------------------
@@ -285,6 +370,65 @@ class RecorderClient:
         """GET /recordings/{name}/info — metadata for a recording."""
         return self._request("GET", f"/recordings/{name}/info")
 
+    def recording_screenshot(
+        self, name: str, time_offset: float, *, quality: int = 80
+    ) -> bytes:
+        """GET /recordings/{name}/screenshot?t=...&quality=... — extract a frame.
+
+        Parameters
+        ----------
+        name:
+            Recording name.
+        time_offset:
+            Time offset in seconds into the video.
+        quality:
+            JPEG quality (1-100, default 80).
+
+        Returns
+        -------
+        bytes
+            JPEG image data.
+        """
+        params = f"?t={time_offset:.3f}&quality={quality}"
+        return self._request_raw("GET", f"/recordings/{name}/screenshot{params}")
+
+    # ------------------------------------------------------------------
+    # Events
+    # ------------------------------------------------------------------
+
+    def events(self, *, since: float | None = None) -> list[dict[str, Any]]:
+        """GET /events — return the event log for the current session.
+
+        Parameters
+        ----------
+        since:
+            Only return events with ``elapsed`` greater than this value.
+            Useful for polling for new events.
+
+        Returns
+        -------
+        list
+            List of event dicts with ``event``, ``time``, ``elapsed``,
+            and optional ``details`` keys.
+        """
+        path = "/events"
+        if since is not None:
+            path = f"/events?since={since}"
+        result = self._request("GET", path)
+        if isinstance(result, list):
+            return result  # type: ignore[return-value]
+        return []
+
+    def dashboard_url(self) -> str:
+        """Return the URL for the HTML dashboard page.
+
+        Returns
+        -------
+        str
+            Full URL to the dashboard.
+        """
+        return f"{self.base_url}/dashboard"
+
     # ------------------------------------------------------------------
     # Health / cleanup
     # ------------------------------------------------------------------
@@ -296,6 +440,30 @@ class RecorderClient:
     def cleanup(self) -> dict[str, Any]:
         """POST /cleanup — remove temporary resources."""
         return self._request("POST", "/cleanup")
+
+    # ------------------------------------------------------------------
+    # Layout validation
+    # ------------------------------------------------------------------
+
+    def validate_layout(self) -> dict[str, Any]:
+        """GET /validate-layout — validate the current panel layout.
+
+        Returns
+        -------
+        dict
+            ``{"warnings": [...], "valid": bool}``
+        """
+        return self._request("GET", "/validate-layout")
+
+    def testcard(self) -> str:
+        """GET /testcard — generate an SVG testcard of the current layout.
+
+        Returns
+        -------
+        str
+            SVG markup.
+        """
+        return self._request_raw("GET", "/testcard").decode("utf-8")
 
     # ------------------------------------------------------------------
     # Session management (parallel recordings)
@@ -456,6 +624,21 @@ class RecorderClient:
         """
         return self._request("GET", f"/compositions/{name}")
 
+    def delete_composition(self, name: str) -> dict[str, Any]:
+        """DELETE /compositions/{name} — delete a composition.
+
+        Parameters
+        ----------
+        name:
+            Name of the composition to delete.
+
+        Returns
+        -------
+        dict
+            Parsed JSON response from the server.
+        """
+        return self._request("DELETE", f"/compositions/{name}")
+
     def list_compositions(self) -> list[dict[str, Any]]:
         """GET /compositions — list all compositions.
 
@@ -567,6 +750,131 @@ class RecorderClient:
             highlight_width=highlight_width,
         )
         helper.result = self.wait_for_composition(name)
+
+    # ------------------------------------------------------------------
+    # Director — Mouse
+    # ------------------------------------------------------------------
+
+    def mouse_move(self, x: int, y: int, *, duration: float | None = None, target_width: float | None = None) -> dict[str, Any]:
+        """POST /director/mouse/move — move the mouse cursor."""
+        body: dict[str, Any] = {"x": x, "y": y}
+        if duration is not None:
+            body["duration"] = duration
+        if target_width is not None:
+            body["target_width"] = target_width
+        return self._request("POST", "/director/mouse/move", body)
+
+    def mouse_click(self, x: int | None = None, y: int | None = None, *, button: int = 1, duration: float | None = None) -> dict[str, Any]:
+        """POST /director/mouse/click — click the mouse."""
+        body: dict[str, Any] = {"button": button}
+        if x is not None:
+            body["x"] = x
+        if y is not None:
+            body["y"] = y
+        if duration is not None:
+            body["duration"] = duration
+        return self._request("POST", "/director/mouse/click", body)
+
+    def mouse_double_click(self, x: int | None = None, y: int | None = None) -> dict[str, Any]:
+        """POST /director/mouse/double-click — double-click."""
+        body: dict[str, Any] = {}
+        if x is not None:
+            body["x"] = x
+        if y is not None:
+            body["y"] = y
+        return self._request("POST", "/director/mouse/double-click", body)
+
+    def mouse_right_click(self, x: int | None = None, y: int | None = None) -> dict[str, Any]:
+        """POST /director/mouse/right-click — right-click."""
+        body: dict[str, Any] = {}
+        if x is not None:
+            body["x"] = x
+        if y is not None:
+            body["y"] = y
+        return self._request("POST", "/director/mouse/right-click", body)
+
+    def mouse_drag(self, start_x: int, start_y: int, end_x: int, end_y: int, *, button: int = 1, duration: float | None = None) -> dict[str, Any]:
+        """POST /director/mouse/drag — drag from one point to another."""
+        body: dict[str, Any] = {"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y, "button": button}
+        if duration is not None:
+            body["duration"] = duration
+        return self._request("POST", "/director/mouse/drag", body)
+
+    def mouse_scroll(self, clicks: int, *, x: int | None = None, y: int | None = None) -> dict[str, Any]:
+        """POST /director/mouse/scroll — scroll the mouse wheel."""
+        body: dict[str, Any] = {"clicks": clicks}
+        if x is not None:
+            body["x"] = x
+        if y is not None:
+            body["y"] = y
+        return self._request("POST", "/director/mouse/scroll", body)
+
+    def mouse_position(self) -> dict[str, Any]:
+        """GET /director/mouse/position — get cursor position."""
+        return self._request("GET", "/director/mouse/position")
+
+    # ------------------------------------------------------------------
+    # Director — Keyboard
+    # ------------------------------------------------------------------
+
+    def keyboard_type(self, text: str, *, wpm: float | None = None) -> dict[str, Any]:
+        """POST /director/keyboard/type — type text with human-like rhythm."""
+        body: dict[str, Any] = {"text": text}
+        if wpm is not None:
+            body["wpm"] = wpm
+        return self._request("POST", "/director/keyboard/type", body)
+
+    def keyboard_press(self, *keys: str) -> dict[str, Any]:
+        """POST /director/keyboard/press — press key(s)."""
+        return self._request("POST", "/director/keyboard/press", {"keys": list(keys)})
+
+    def keyboard_hold(self, key: str) -> dict[str, Any]:
+        """POST /director/keyboard/hold — hold a key down."""
+        return self._request("POST", "/director/keyboard/hold", {"key": key})
+
+    def keyboard_release(self, key: str) -> dict[str, Any]:
+        """POST /director/keyboard/release — release a held key."""
+        return self._request("POST", "/director/keyboard/release", {"key": key})
+
+    # ------------------------------------------------------------------
+    # Director — Window
+    # ------------------------------------------------------------------
+
+    def window_find(self, name: str | None = None, *, class_name: str | None = None, timeout: float = 10.0) -> dict[str, Any]:
+        """POST /director/window/find — find a window by name or WM_CLASS."""
+        body: dict[str, Any] = {"timeout": timeout}
+        if name is not None:
+            body["name"] = name
+        if class_name is not None:
+            body["class"] = class_name
+        return self._request("POST", "/director/window/find", body)
+
+    def window_focus(self, window_id: str) -> dict[str, Any]:
+        """POST /director/window/{id}/focus — focus a window."""
+        return self._request("POST", f"/director/window/{window_id}/focus")
+
+    def window_move(self, window_id: str, x: int, y: int) -> dict[str, Any]:
+        """POST /director/window/{id}/move — move a window."""
+        return self._request("POST", f"/director/window/{window_id}/move", {"x": x, "y": y})
+
+    def window_resize(self, window_id: str, width: int, height: int) -> dict[str, Any]:
+        """POST /director/window/{id}/resize — resize a window."""
+        return self._request("POST", f"/director/window/{window_id}/resize", {"width": width, "height": height})
+
+    def window_minimize(self, window_id: str) -> dict[str, Any]:
+        """POST /director/window/{id}/minimize — minimize a window."""
+        return self._request("POST", f"/director/window/{window_id}/minimize")
+
+    def window_geometry(self, window_id: str) -> dict[str, Any]:
+        """GET /director/window/{id}/geometry — get window geometry."""
+        return self._request("GET", f"/director/window/{window_id}/geometry")
+
+    def window_tile(self, window_ids: list[str], layout: str = "side-by-side", *, bounds: tuple[int, int, int, int] | None = None) -> dict[str, Any]:
+        """POST /director/window/tile — tile windows."""
+        body: dict[str, Any] = {"window_ids": window_ids, "layout": layout}
+        if bounds is not None:
+            body["bounds"] = list(bounds)
+        return self._request("POST", "/director/window/tile", body)
 
     # ------------------------------------------------------------------
     # Convenience helpers

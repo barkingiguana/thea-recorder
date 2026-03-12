@@ -30,6 +30,18 @@ module Recorder
       post("/display/stop")
     end
 
+    def display_screenshot(quality: 80)
+      raw_get("/display/screenshot?quality=#{quality}").body
+    end
+
+    def display_stream_url(fps: 5)
+      "#{@base_url}/display/stream?fps=#{fps}"
+    end
+
+    def display_viewer_url
+      "#{@base_url}/display/view"
+    end
+
     # Panels
 
     def add_panel(name:, title:, width: nil, height: nil)
@@ -78,6 +90,17 @@ module Recorder
       get("/recording/status")
     end
 
+    def add_annotation(label:, time: nil, details: nil)
+      body = { label: label }
+      body[:time] = time if time
+      body[:details] = details if details
+      post("/recording/annotations", body)
+    end
+
+    def list_annotations
+      get("/recording/annotations")
+    end
+
     def recording(name)
       start_recording(name: name)
       yield self
@@ -99,6 +122,22 @@ module Recorder
 
     def recording_info(name)
       get("/recordings/#{encode(name)}/info")
+    end
+
+    def recording_screenshot(name:, time:, quality: 80)
+      raw_get("/recordings/#{encode(name)}/screenshot?t=#{"%.3f" % time}&quality=#{quality}").body
+    end
+
+    # Events
+
+    def events(since: nil)
+      path = "/events"
+      path = "/events?since=#{since}" if since
+      get(path)
+    end
+
+    def dashboard_url
+      "#{@base_url}/dashboard"
     end
 
     # Sessions
@@ -165,6 +204,109 @@ module Recorder
       end
 
       raise Error, "Composition not ready after #{timeout}s"
+    end
+
+    # Director — Mouse
+
+    def mouse_move(x:, y:, duration: nil, target_width: nil)
+      body = { x: x, y: y }
+      body[:duration] = duration if duration
+      body[:target_width] = target_width if target_width
+      post("/director/mouse/move", body)
+    end
+
+    def mouse_click(x: nil, y: nil, button: 1, duration: nil)
+      body = { button: button }
+      body[:x] = x if x
+      body[:y] = y if y
+      body[:duration] = duration if duration
+      post("/director/mouse/click", body)
+    end
+
+    def mouse_double_click(x: nil, y: nil)
+      body = {}
+      body[:x] = x if x
+      body[:y] = y if y
+      post("/director/mouse/double-click", body)
+    end
+
+    def mouse_right_click(x: nil, y: nil)
+      body = {}
+      body[:x] = x if x
+      body[:y] = y if y
+      post("/director/mouse/right-click", body)
+    end
+
+    def mouse_drag(start_x:, start_y:, end_x:, end_y:, button: 1, duration: nil)
+      body = { start_x: start_x, start_y: start_y, end_x: end_x, end_y: end_y, button: button }
+      body[:duration] = duration if duration
+      post("/director/mouse/drag", body)
+    end
+
+    def mouse_scroll(clicks:, x: nil, y: nil)
+      body = { clicks: clicks }
+      body[:x] = x if x
+      body[:y] = y if y
+      post("/director/mouse/scroll", body)
+    end
+
+    def mouse_position
+      get("/director/mouse/position")
+    end
+
+    # Director — Keyboard
+
+    def keyboard_type(text:, wpm: nil)
+      body = { text: text }
+      body[:wpm] = wpm if wpm
+      post("/director/keyboard/type", body)
+    end
+
+    def keyboard_press(*keys)
+      post("/director/keyboard/press", keys: keys)
+    end
+
+    def keyboard_hold(key:)
+      post("/director/keyboard/hold", key: key)
+    end
+
+    def keyboard_release(key:)
+      post("/director/keyboard/release", key: key)
+    end
+
+    # Director — Window
+
+    def window_find(name: nil, class_name: nil, timeout: 10.0)
+      body = { timeout: timeout }
+      body[:name] = name if name
+      body[:class] = class_name if class_name
+      post("/director/window/find", body)
+    end
+
+    def window_focus(window_id:)
+      post("/director/window/#{encode(window_id)}/focus")
+    end
+
+    def window_move(window_id:, x:, y:)
+      post("/director/window/#{encode(window_id)}/move", x: x, y: y)
+    end
+
+    def window_resize(window_id:, width:, height:)
+      post("/director/window/#{encode(window_id)}/resize", width: width, height: height)
+    end
+
+    def window_minimize(window_id:)
+      post("/director/window/#{encode(window_id)}/minimize")
+    end
+
+    def window_geometry(window_id:)
+      get("/director/window/#{encode(window_id)}/geometry")
+    end
+
+    def window_tile(window_ids:, layout: "side-by-side", bounds: nil)
+      body = { window_ids: window_ids, layout: layout }
+      body[:bounds] = bounds if bounds
+      post("/director/window/tile", body)
     end
 
     # Layout / Utility
