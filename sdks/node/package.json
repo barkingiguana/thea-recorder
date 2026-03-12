@@ -1,6 +1,6 @@
 {
   "name": "thea-recorder",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Node.js/TypeScript SDK for the thea-recorder HTTP server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.12.0] — 2026-03-12
+
+### Features
+- feat: add Go SDK error helpers and idempotent recording/composition
+
+### Other
+- Merge pull request #22 from barkingiguana/feat/go-sdk-helpers
+- docs: update marketing site, SDK docs, and integration guide for v0.10.0
+
+
 ## [0.11.0] — 2026-03-12
 
 ### Features
