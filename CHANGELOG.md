@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.14.0] — 2026-03-12
+
+### Features
+- feat: bring all 5 SDKs to feature parity with reference client
+
+### Other
+- Merge pull request #25 from barkingiguana/feat/sdk-parity
+
+
 ## [0.13.0] — 2026-03-12
 
 ### Features
