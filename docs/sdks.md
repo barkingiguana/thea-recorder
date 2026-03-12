@@ -109,6 +109,18 @@ Every SDK provides scoped helpers that handle start/stop automatically:
 | `with_panel(name, ...)` | Add panel, run code, remove panel |
 | `wait_until_ready(timeout)` | Poll `/health` until server responds. Called automatically on first API call. |
 
+### Go SDK extras
+
+The Go SDK provides additional helpers for error classification and idempotent operations:
+
+| Helper | Description |
+|---|---|
+| `IsConflict(err)` | True if the error is a 409 Conflict (resource already exists) |
+| `IsAccepted(err)` | True if the error is a 202 Accepted (async operation in progress) |
+| `IsNotFound(err)` | True if the error is a 404 Not Found |
+| `EnsureRecording(ctx, name)` | Idempotent recording start — returns existing status on 409 |
+| `CreateCompositionAndWait(ctx, req, timeout)` | Create composition + poll until complete (handles 409) |
+
 ## Configuration
 
 All SDKs support:

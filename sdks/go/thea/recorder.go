@@ -348,6 +348,34 @@ func (c *Client) Recording(ctx context.Context, name string) (stop func() (*Reco
 	}, nil
 }
 
+// EnsureRecording starts a recording if one is not already active. If the
+// server returns 409 Conflict (already recording), it fetches and returns the
+// current recording status instead of failing. This makes the call idempotent.
+func (c *Client) EnsureRecording(ctx context.Context, name string) (*RecordingStatus, error) {
+	_, err := c.StartRecording(ctx, name)
+	if err != nil {
+		if !IsConflict(err) {
+			return nil, err
+		}
+		// Already recording — return current status.
+	}
+	return c.RecordingStatusInfo(ctx)
+}
+
+// CreateCompositionAndWait creates a composition and polls until it completes,
+// fails, or the timeout elapses. If the composition already exists (409), it
+// falls through to polling the existing one.
+func (c *Client) CreateCompositionAndWait(ctx context.Context, req CompositionRequest, timeout time.Duration) (*CompositionStatus, error) {
+	_, err := c.CreateComposition(ctx, req)
+	if err != nil {
+		if !IsConflict(err) {
+			return nil, err
+		}
+		// Composition already exists — poll it.
+	}
+	return c.WaitForComposition(ctx, req.Name, timeout)
+}
+
 // ---------------------------------------------------------------------------
 // Sessions
 // ---------------------------------------------------------------------------
