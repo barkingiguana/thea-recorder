@@ -102,7 +102,7 @@ class Recorder:
         self._output_path = None
         self._recording_start = None
         self._allocated_bar_height = PANEL_HEIGHT
-        self._panels = {}  # name -> {"title": str, "path": str, "width": int|None, "height": int|None}
+        self._panels = {}  # name -> {"title": str, "path": str, "width": int|None, "height": int|None, "bg_color": str, "opacity": float}
         self._launched_apps = []  # Popen instances launched via launch_app()
         self._director = None  # Lazy-initialised Director instance
 
@@ -240,6 +240,8 @@ class Recorder:
         title: str = "",
         width: int = None,
         height: int = None,
+        bg_color: str = None,
+        opacity: float = None,
     ) -> list[str]:
         """Register a named panel.
 
@@ -250,6 +252,10 @@ class Recorder:
                    remaining space equally with other auto-width panels.
             height: Panel content height in pixels.  *None* means use the
                    bar height (which defaults to :data:`PANEL_HEIGHT`).
+            bg_color: Background colour as a hex string (e.g. ``"#1a1a2e"``
+                   or ``"1a1a2e"``).  *None* uses the default dark theme.
+            opacity: Background opacity from ``0.0`` (fully transparent) to
+                   ``1.0`` (fully opaque).  *None* defaults to ``1.0``.
 
         Returns:
             List of layout validation warnings (may be empty).
@@ -260,7 +266,15 @@ class Recorder:
         os.close(fd)
         with open(path, "w") as f:
             f.write("")
-        self._panels[name] = {"title": title, "path": path, "width": width, "height": height}
+        # Normalise colour: strip leading '#' if present
+        if bg_color is not None:
+            bg_color = bg_color.lstrip("#")
+        if opacity is not None:
+            opacity = max(0.0, min(1.0, opacity))
+        self._panels[name] = {
+            "title": title, "path": path, "width": width, "height": height,
+            "bg_color": bg_color, "opacity": opacity,
+        }
         return self.validate_layout()
 
     def remove_panel(self, name: str):
@@ -314,6 +328,81 @@ class Recorder:
                 os.unlink(panel["path"] + suffix)
             except FileNotFoundError:
                 pass
+
+    # -- Screenshots -------------------------------------------------------
+
+    def screenshot(self, quality: int = 80) -> bytes:
+        """Capture the current display as a JPEG image.
+
+        Args:
+            quality: JPEG quality (1-100).
+
+        Returns:
+            Raw JPEG bytes.
+        """
+        if self._xvfb_proc is None:
+            raise RuntimeError("Display not started")
+
+        w, h = self._display_size.split("x")
+        w_int, h_int = int(w), int(h)
+        bar_h = self.panel_bar_height if self._panels else 0
+        total_h = h_int + bar_h
+
+        # Map quality 1-100 to ffmpeg q:v 31-1 (lower q:v = higher quality)
+        qv = max(1, min(31, 31 - (quality * 30 // 100)))
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "x11grab",
+            "-video_size", f"{w_int}x{total_h}",
+            "-i", self.display_string,
+            "-vframes", "1",
+            "-q:v", str(qv),
+            "-f", "mjpeg",
+            "-",
+        ]
+        result = subprocess.run(
+            cmd, capture_output=True, timeout=5,
+            env=self.display_env,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Screenshot failed: {result.stderr.decode('utf-8', errors='replace')[:200]}"
+            )
+        return result.stdout
+
+    @staticmethod
+    def screenshot_from_video(video_path: str, time_offset: float, quality: int = 80) -> bytes:
+        """Extract a frame from a recorded video at a given time offset.
+
+        Args:
+            video_path: Path to the MP4 file.
+            time_offset: Time in seconds.
+            quality: JPEG quality (1-100).
+
+        Returns:
+            Raw JPEG bytes.
+        """
+        if not os.path.isfile(video_path):
+            raise FileNotFoundError(f"Video not found: {video_path}")
+
+        qv = max(1, min(31, 31 - (quality * 30 // 100)))
+
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", f"{time_offset:.3f}",
+            "-i", video_path,
+            "-vframes", "1",
+            "-q:v", str(qv),
+            "-f", "mjpeg",
+            "-",
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=10)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Frame extraction failed: {result.stderr.decode('utf-8', errors='replace')[:200]}"
+            )
+        return result.stdout
 
     # -- Recording ---------------------------------------------------------
 
@@ -411,14 +500,40 @@ class Recorder:
 
         layout = self._panel_layout(w)
 
-        parts = [
-            # Dark background bar below the viewport
-            f"drawbox=x=0:y={bar_y}:w={w}:h={bar_h}"
-            f":color=0x1a1a2e@1:t=fill",
-            # Thin separator line at top of bar
+        # Check if all panels share the same background
+        default_bg = "1a1a2e"
+        default_opacity = 1.0
+        all_same_bg = all(
+            (p.get("bg_color") or default_bg) == (layout[0][1].get("bg_color") or default_bg)
+            and (p.get("opacity") if p.get("opacity") is not None else default_opacity)
+            == (layout[0][1].get("opacity") if layout[0][1].get("opacity") is not None else default_opacity)
+            for _, p, _, _ in layout
+        )
+
+        parts = []
+        if all_same_bg:
+            # Single background for the whole bar
+            bg = layout[0][1].get("bg_color") or default_bg
+            op = layout[0][1].get("opacity") if layout[0][1].get("opacity") is not None else default_opacity
+            parts.append(
+                f"drawbox=x=0:y={bar_y}:w={w}:h={bar_h}"
+                f":color=0x{bg}@{op}:t=fill"
+            )
+        else:
+            # Per-panel backgrounds
+            for _, panel, panel_x, panel_w in layout:
+                bg = panel.get("bg_color") or default_bg
+                op = panel.get("opacity") if panel.get("opacity") is not None else default_opacity
+                parts.append(
+                    f"drawbox=x={panel_x}:y={bar_y}:w={panel_w}:h={bar_h}"
+                    f":color=0x{bg}@{op}:t=fill"
+                )
+
+        # Thin separator line at top of bar
+        parts.append(
             f"drawbox=x=0:y={bar_y}:w={w}:h=1"
-            f":color=0x30363d@1:t=fill",
-        ]
+            f":color=0x30363d@1:t=fill"
+        )
 
         for i, (name, panel, panel_x, panel_w) in enumerate(layout):
             # Vertical separator (skip first panel)

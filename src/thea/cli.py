@@ -149,6 +149,76 @@ def start_display(ctx, display_size):
     _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
 
 
+@main.command("screenshot")
+@click.option("--output", "-o", required=True, help="Output JPEG file path.")
+@click.option("--quality", default=80, type=int, help="JPEG quality (1-100).")
+@click.pass_context
+def screenshot(ctx, output, quality):
+    """Capture a screenshot of the live display."""
+    server = _server_url(ctx)
+    try:
+        req = Request(f"{server}/display/screenshot?quality={quality}")
+        resp = urlopen(req, timeout=10)
+        data = resp.read()
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    with open(output, "wb") as f:
+        f.write(data)
+    if not ctx.obj["quiet"]:
+        click.echo(json.dumps({"path": output, "size": len(data)}))
+
+
+@main.command("recording-screenshot")
+@click.option("--name", required=True, help="Recording name.")
+@click.option("--time", "time_offset", required=True, type=float, help="Time offset in seconds.")
+@click.option("--output", "-o", required=True, help="Output JPEG file path.")
+@click.option("--quality", default=80, type=int, help="JPEG quality (1-100).")
+@click.pass_context
+def recording_screenshot(ctx, name, time_offset, output, quality):
+    """Extract a frame from a recorded video at a given time offset."""
+    server = _server_url(ctx)
+    url = f"{server}/recordings/{name}/screenshot?t={time_offset}&quality={quality}"
+    try:
+        req = Request(url)
+        resp = urlopen(req, timeout=30)
+        data = resp.read()
+    except URLError as e:
+        if hasattr(e, "code") and e.code == 404:
+            click.echo(f"Error: recording '{name}' not found", err=True)
+            sys.exit(1)
+        if hasattr(e, "code") and e.code == 400:
+            click.echo(f"Error: {e.read().decode('utf-8', errors='replace')}", err=True)
+            sys.exit(1)
+        _handle_connection_error(server)
+    except (ConnectionError, OSError):
+        _handle_connection_error(server)
+    with open(output, "wb") as f:
+        f.write(data)
+    if not ctx.obj["quiet"]:
+        click.echo(json.dumps({"path": output, "size": len(data)}))
+
+
+@main.command("stream-url")
+@click.option("--fps", default=5, type=int, help="Frames per second (1-15).")
+@click.pass_context
+def stream_url(ctx, fps):
+    """Print the MJPEG stream URL for the live display."""
+    server = _server_url(ctx)
+    url = f"{server}/display/stream?fps={fps}"
+    if not ctx.obj["quiet"]:
+        click.echo(url)
+
+
+@main.command("view-url")
+@click.pass_context
+def view_url(ctx):
+    """Print the URL for the HTML live viewer page."""
+    server = _server_url(ctx)
+    url = f"{server}/display/view"
+    if not ctx.obj["quiet"]:
+        click.echo(url)
+
+
 @main.command("stop-display")
 @click.pass_context
 def stop_display(ctx):
@@ -168,8 +238,10 @@ def stop_display(ctx):
 @click.option("--title", default="", help="Panel heading.")
 @click.option("--width", default=None, type=int, help="Fixed width in pixels.")
 @click.option("--height", default=None, type=int, help="Panel height in pixels.")
+@click.option("--bg-color", default=None, help="Background colour (hex, e.g. '1a1a2e').")
+@click.option("--opacity", default=None, type=float, help="Background opacity (0.0-1.0).")
 @click.pass_context
-def add_panel(ctx, name, title, width, height):
+def add_panel(ctx, name, title, width, height, bg_color, opacity):
     """Add a named panel to the overlay bar."""
     server = _server_url(ctx)
     body = {"name": name, "title": title}
@@ -177,6 +249,10 @@ def add_panel(ctx, name, title, width, height):
         body["width"] = width
     if height is not None:
         body["height"] = height
+    if bg_color is not None:
+        body["bg_color"] = bg_color
+    if opacity is not None:
+        body["opacity"] = opacity
     try:
         status, data = _request(f"{server}/panels", method="POST", data=body)
     except (URLError, ConnectionError, OSError):
@@ -338,7 +414,7 @@ def cleanup(ctx):
 @click.pass_context
 def version(ctx):
     """Print the recorder version."""
-    _print_result({"version": "0.9.2"}, ctx.obj["quiet"], ctx.obj["pretty"])
+    _print_result({"version": "0.10.0"}, ctx.obj["quiet"], ctx.obj["pretty"])
 
 
 # ── Layout commands ──────────────────────────────────────────────────

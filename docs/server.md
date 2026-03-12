@@ -59,6 +59,39 @@ curl -X POST http://localhost:9123/display/stop
 {"status": "stopped"}
 ```
 
+#### Screenshot (live display)
+Capture a single JPEG frame from the live display.
+```bash
+curl http://localhost:9123/display/screenshot -o screenshot.jpg
+curl http://localhost:9123/display/screenshot?quality=50 -o screenshot.jpg
+```
+**Response** `200` with `Content-Type: image/jpeg`. The `quality` parameter (1-100, default 80) controls JPEG compression.
+
+**Error** `409` if display not started.
+
+#### Stream (raw MJPEG feed)
+A continuous MJPEG byte stream of the live display. Use this for embedding in HTML (`<img src="/display/stream">`) or for programmatic consumption.
+```bash
+# Embed in HTML:
+<img src="http://localhost:9123/display/stream?fps=5" />
+
+# Or consume with curl (runs until you Ctrl-C):
+curl http://localhost:9123/display/stream?fps=10 > /dev/null
+```
+**Response** `200` with `Content-Type: multipart/x-mixed-replace`. The `fps` parameter (1-15, default 5) controls frame rate.
+
+**Error** `409` if display not started.
+
+#### Viewer (HTML page)
+A self-contained HTML page with a dark-themed live viewer, status indicator, and auto-reconnect. Open this URL directly in a browser.
+```bash
+# Open in your browser:
+open http://localhost:9123/display/view
+```
+**Response** `200` with `Content-Type: text/html`.
+
+All three display observation endpoints are also available under `/sessions/{name}/display/screenshot`, `/sessions/{name}/display/stream`, and `/sessions/{name}/display/view`.
+
 ### Panels
 
 #### Create panel
@@ -78,6 +111,8 @@ curl -X POST http://localhost:9123/panels \
 | `title` | no | Bold heading (default: empty string) |
 | `width` | no | Fixed width in pixels (`null` = auto-width, `<= 0` treated as auto) |
 | `height` | no | Panel height in pixels (`null` = use bar height default of 300px) |
+| `bg_color` | no | Background colour as 6-digit hex string, e.g. `"1a1a2e"` (`null` = default) |
+| `opacity` | no | Background opacity from `0.0` (transparent) to `1.0` (opaque) (`null` = default) |
 
 The response includes a `warnings` array if there are layout validation issues:
 ```json
@@ -204,6 +239,21 @@ wget http://localhost:9123/recordings/login_test -O login_test.mp4
 ```
 
 **Error** `404` if recording doesn't exist. `400` if name contains path traversal characters.
+
+#### Screenshot from recording
+Extract a single JPEG frame from a saved recording at any time offset.
+```bash
+curl "http://localhost:9123/recordings/login_test/screenshot?t=12.5" -o frame.jpg
+curl "http://localhost:9123/recordings/login_test/screenshot?t=0&quality=95" -o frame.jpg
+```
+**Response** `200` with `Content-Type: image/jpeg`.
+
+| Parameter | Required | Description |
+|---|---|---|
+| `t` | yes | Time offset in seconds (e.g. `12.5`) |
+| `quality` | no | JPEG quality 1-100 (default: 80) |
+
+**Error** `400` if `t` is missing. `404` if recording doesn't exist.
 
 #### Recording info
 ```bash
