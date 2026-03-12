@@ -384,6 +384,33 @@ def download(ctx, name, output):
         _handle_connection_error(server)
 
 
+# ── Events and dashboard commands ────────────────────────────────────────
+
+@main.command("events")
+@click.option("--since", default=None, type=float, help="Only show events after this elapsed time.")
+@click.pass_context
+def events(ctx, since):
+    """List events from the session event log."""
+    server = _server_url(ctx)
+    url = f"{server}/events"
+    if since is not None:
+        url += f"?since={since}"
+    try:
+        status, data = _request(url)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("dashboard-url")
+@click.pass_context
+def dashboard_url(ctx):
+    """Print the URL for the HTML dashboard page."""
+    server = _server_url(ctx)
+    if not ctx.obj["quiet"]:
+        click.echo(f"{server}/dashboard")
+
+
 # ── Utility commands ─────────────────────────────────────────────────────
 
 @main.command("health")
