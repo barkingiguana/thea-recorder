@@ -19,6 +19,7 @@ import re
 import subprocess
 import tempfile
 import time
+from contextlib import contextmanager
 
 from .layout import Region, generate_testcard, validate_regions
 
@@ -107,6 +108,8 @@ class Recorder:
         self._director = None  # Lazy-initialised Director instance
         self._annotations = []
         self._last_annotations = []
+        self._steps = []               # Steps for current recording
+        self._last_recording_steps = [] # Steps from last completed recording
 
     # -- Display -----------------------------------------------------------
 
@@ -236,6 +239,57 @@ class Recorder:
     def list_annotations(self) -> list[dict]:
         """Return annotations for the current recording."""
         return list(self._annotations)
+
+    # -- Step tracking -----------------------------------------------------
+
+    @contextmanager
+    def step(self, name: str, *, keyword: str = "Step"):
+        """Track a step for generate_report timelines.
+
+        Usage::
+
+            with rec.step("Register a domain"):
+                run_command("dm domains add example.com")
+
+        On clean exit the step is marked ``"passed"``.  If the block
+        raises, the step is marked ``"failed"`` and the exception
+        propagates.
+
+        Args:
+            name: Human-readable step description.
+            keyword: Step keyword (default ``"Step"``).
+        """
+        entry = {
+            "keyword": keyword,
+            "name": name,
+            "status": "running",
+            "offset": self.recording_elapsed,
+        }
+        self._steps.append(entry)
+        try:
+            yield entry
+            entry["status"] = "passed"
+        except Exception:
+            entry["status"] = "failed"
+            raise
+
+    @property
+    def last_recording_steps(self) -> list[dict]:
+        """Steps collected during the last completed recording."""
+        return list(self._last_recording_steps)
+
+    @property
+    def last_recording_status(self) -> str:
+        """Overall status of the last completed recording.
+
+        Returns ``"passed"`` if all steps passed (or there were no steps),
+        ``"failed"`` if any step failed.
+        """
+        if not self._last_recording_steps:
+            return "passed"
+        if any(s["status"] == "failed" for s in self._last_recording_steps):
+            return "failed"
+        return "passed"
 
     # -- Application launching ---------------------------------------------
 
@@ -497,6 +551,7 @@ class Recorder:
         os.makedirs(self._output_dir, exist_ok=True)
         self._recording_start = time.monotonic()
         self._annotations = []
+        self._steps = []
 
         safe = re.sub(r"[^\w\-.]", "_", filename)[:120]
         self._output_path = os.path.join(self._output_dir, f"{safe}.mp4")
@@ -739,6 +794,7 @@ class Recorder:
 
         path = self._output_path
         self._last_annotations = list(self._annotations)
+        self._last_recording_steps = list(self._steps)
         self._ffmpeg_proc = None
         self._output_path = None
         self._recording_start = None
