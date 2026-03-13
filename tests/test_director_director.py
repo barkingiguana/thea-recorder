@@ -17,8 +17,11 @@ class TestDirectorInit:
     @patch("thea.director.director.subprocess.Popen")
     @patch("thea.director.director.time.sleep")
     def test_display_string(self, mock_sleep, mock_popen, mock_run):
-        # Simulate no WM running.
-        mock_run.return_value = MagicMock(stdout="no such atom", returncode=1)
+        # Simulate no WM running, then WM becomes ready.
+        no_wm = MagicMock(stdout="no such atom", returncode=1)
+        wm_check = MagicMock(stdout="_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001", returncode=0)
+        supported = MagicMock(stdout="_NET_SUPPORTED(ATOM) = _NET_WM_STATE", returncode=0)
+        mock_run.side_effect = [no_wm, wm_check, supported]
         d = Director(":99")
         assert d.env["DISPLAY"] == ":99"
 
@@ -46,7 +49,10 @@ class TestDirectorInit:
     @patch("thea.director.director.subprocess.Popen")
     @patch("thea.director.director.subprocess.run")
     def test_starts_openbox_when_no_wm(self, mock_run, mock_popen, mock_sleep):
-        mock_run.return_value = MagicMock(stdout="no such atom", returncode=1)
+        no_wm = MagicMock(stdout="no such atom", returncode=1)
+        wm_check = MagicMock(stdout="_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001", returncode=0)
+        supported = MagicMock(stdout="_NET_SUPPORTED(ATOM) = _NET_WM_STATE", returncode=0)
+        mock_run.side_effect = [no_wm, wm_check, supported]
         mock_popen.return_value = MagicMock()
         d = Director(":99")
         mock_popen.assert_called_once()
@@ -134,7 +140,10 @@ class TestDirectorCleanup:
     @patch("thea.director.director.subprocess.Popen")
     @patch("thea.director.director.subprocess.run")
     def test_cleanup_terminates_wm(self, mock_run, mock_popen, mock_sleep):
-        mock_run.return_value = MagicMock(stdout="no such atom", returncode=1)
+        no_wm = MagicMock(stdout="no such atom", returncode=1)
+        wm_check = MagicMock(stdout="_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001", returncode=0)
+        supported = MagicMock(stdout="_NET_SUPPORTED(ATOM) = _NET_WM_STATE", returncode=0)
+        mock_run.side_effect = [no_wm, wm_check, supported]
         proc = MagicMock()
         proc.poll.return_value = None  # Still running.
         mock_popen.return_value = proc
@@ -152,7 +161,10 @@ class TestDirectorCleanup:
     @patch("thea.director.director.subprocess.Popen")
     @patch("thea.director.director.subprocess.run")
     def test_cleanup_force_kill_on_timeout(self, mock_run, mock_popen, mock_sleep):
-        mock_run.return_value = MagicMock(stdout="no such atom", returncode=1)
+        no_wm = MagicMock(stdout="no such atom", returncode=1)
+        wm_check = MagicMock(stdout="_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001", returncode=0)
+        supported = MagicMock(stdout="_NET_SUPPORTED(ATOM) = _NET_WM_STATE", returncode=0)
+        mock_run.side_effect = [no_wm, wm_check, supported]
         proc = MagicMock()
         proc.poll.return_value = None
         proc.wait.side_effect = subprocess.TimeoutExpired(cmd="openbox", timeout=5)

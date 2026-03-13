@@ -172,8 +172,10 @@ class Recorder:
     def _start_window_manager(self, env: dict) -> None:
         """Start openbox and wait for it to be ready.
 
-        Polls for the EWMH ``_NET_SUPPORTING_WM_CHECK`` property which
-        openbox sets once it is ready to manage windows.
+        Polls for the EWMH ``_NET_SUPPORTING_WM_CHECK`` property, then
+        verifies ``_NET_SUPPORTED`` is also present.  openbox sets the
+        check window early but only populates ``_NET_SUPPORTED`` once it
+        is fully initialised and able to handle focus requests.
         """
         self._wm_proc = subprocess.Popen(
             ["openbox"],
@@ -191,6 +193,19 @@ class Recorder:
                 text=True,
             )
             if "window id" in result.stdout.lower():
+                break
+            time.sleep(0.1)
+
+        # Wait for _NET_SUPPORTED — confirms the WM is fully ready to
+        # manage windows (not just that it has created its check window).
+        while time.monotonic() < deadline:
+            result = subprocess.run(
+                ["xprop", "-root", "_NET_SUPPORTED"],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if "_NET_SUPPORTED" in result.stdout and "no such atom" not in result.stdout.lower():
                 break
             time.sleep(0.1)
         logger.debug("Window manager started on %s", self.display_string)

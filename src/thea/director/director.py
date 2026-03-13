@@ -59,7 +59,9 @@ class Director:
 
         Detects an existing WM by checking if there's a window with
         the _NET_SUPPORTING_WM_CHECK property (EWMH standard).
-        If not found, starts openbox in the background.
+        If not found, starts openbox in the background and waits for
+        both ``_NET_SUPPORTING_WM_CHECK`` and ``_NET_SUPPORTED`` to
+        confirm it is fully ready to manage windows.
         """
         result = subprocess.run(
             ["xprop", "-root", "_NET_SUPPORTING_WM_CHECK"],
@@ -76,7 +78,32 @@ class Director:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        time.sleep(0.5)
+
+        # Poll until the WM advertises EWMH support.
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            result = subprocess.run(
+                ["xprop", "-root", "_NET_SUPPORTING_WM_CHECK"],
+                env=self._env,
+                capture_output=True,
+                text=True,
+            )
+            if "window id" in result.stdout.lower():
+                break
+            time.sleep(0.1)
+
+        # Wait for _NET_SUPPORTED — confirms the WM is fully ready to
+        # manage windows (not just that it has created its check window).
+        while time.monotonic() < deadline:
+            result = subprocess.run(
+                ["xprop", "-root", "_NET_SUPPORTED"],
+                env=self._env,
+                capture_output=True,
+                text=True,
+            )
+            if "_NET_SUPPORTED" in result.stdout and "no such atom" not in result.stdout.lower():
+                break
+            time.sleep(0.1)
 
     @property
     def env(self) -> dict:

@@ -175,9 +175,11 @@ class TestWindowManager:
     def test_start_window_manager_starts_openbox(self, mock_popen, _sleep):
         wm_proc = Mock()
         mock_popen.return_value = wm_proc
-        run_result = Mock()
-        run_result.stdout = "_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001"
-        with patch("thea.recorder.subprocess.run", return_value=run_result):
+        wm_check = Mock()
+        wm_check.stdout = "_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001"
+        supported = Mock()
+        supported.stdout = "_NET_SUPPORTED(ATOM) = _NET_WM_STATE, _NET_ACTIVE_WINDOW"
+        with patch("thea.recorder.subprocess.run", side_effect=[wm_check, supported]):
             r = Recorder(display=42)
             env = r.display_env
             r._start_window_manager(env)
@@ -193,14 +195,21 @@ class TestWindowManager:
         mock_popen.return_value = Mock()
         not_ready = Mock()
         not_ready.stdout = ""
-        ready = Mock()
-        ready.stdout = "_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001"
-        with patch("thea.recorder.subprocess.run", side_effect=[not_ready, not_ready, ready]):
+        wm_check_ready = Mock()
+        wm_check_ready.stdout = "_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001"
+        supported_not_ready = Mock()
+        supported_not_ready.stdout = "no such atom on any window"
+        supported_ready = Mock()
+        supported_ready.stdout = "_NET_SUPPORTED(ATOM) = _NET_WM_STATE, _NET_ACTIVE_WINDOW"
+        with patch("thea.recorder.subprocess.run", side_effect=[
+            not_ready, not_ready, wm_check_ready,
+            supported_not_ready, supported_ready,
+        ]):
             r = Recorder(display=42)
             r._start_window_manager(r.display_env)
 
-        # Slept between polls
-        assert mock_sleep.call_count == 2
+        # Slept between polls: 2 for WM_CHECK + 1 for SUPPORTED
+        assert mock_sleep.call_count == 3
 
     def test_stop_window_manager_terminates_proc(self):
         r = Recorder()
