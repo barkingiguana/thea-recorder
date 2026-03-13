@@ -13,7 +13,8 @@ from thea.server import create_app
 def app(tmp_path):
     with patch("thea.recorder.subprocess.Popen"), \
          patch("thea.recorder.subprocess.run"), \
-         patch("thea.recorder.os.path.exists", return_value=True):
+         patch("thea.recorder.os.path.exists", return_value=True), \
+         patch("thea.recorder.Recorder._start_window_manager"):
         app = create_app(output_dir=str(tmp_path), display=42)
         app.config["TESTING"] = True
         yield app
@@ -37,7 +38,8 @@ class TestDisplayScreenshot:
     def test_screenshot_returns_jpeg(self, mock_run, client):
         """Screenshot returns JPEG bytes when display is running."""
         # Start the display first
-        with patch("thea.recorder.subprocess.Popen") as mock_popen:
+        with patch("thea.recorder.subprocess.Popen") as mock_popen, \
+             patch("thea.recorder.Recorder._start_window_manager"):
             mock_proc = Mock()
             mock_proc.poll.return_value = None
             mock_popen.return_value = mock_proc
@@ -58,7 +60,8 @@ class TestDisplayScreenshot:
     @patch("thea.recorder.subprocess.run")
     def test_screenshot_quality_param(self, mock_run, client):
         """Quality parameter is forwarded."""
-        with patch("thea.recorder.subprocess.Popen") as mock_popen:
+        with patch("thea.recorder.subprocess.Popen") as mock_popen, \
+             patch("thea.recorder.Recorder._start_window_manager"):
             mock_proc = Mock()
             mock_proc.poll.return_value = None
             mock_popen.return_value = mock_proc
@@ -80,7 +83,8 @@ class TestDisplayStream:
     @patch("thea.recorder.subprocess.run")
     def test_stream_content_type(self, mock_run, client):
         """Stream returns multipart MJPEG content type."""
-        with patch("thea.recorder.subprocess.Popen") as mock_popen:
+        with patch("thea.recorder.subprocess.Popen") as mock_popen, \
+             patch("thea.recorder.Recorder._start_window_manager"):
             mock_proc = Mock()
             mock_proc.poll.return_value = None
             mock_popen.return_value = mock_proc

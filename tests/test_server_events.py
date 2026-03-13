@@ -12,7 +12,8 @@ from thea.server import create_app
 def app(tmp_path):
     with patch("thea.recorder.subprocess.Popen"), \
          patch("thea.recorder.subprocess.run"), \
-         patch("thea.recorder.os.path.exists", return_value=True):
+         patch("thea.recorder.os.path.exists", return_value=True), \
+         patch("thea.recorder.Recorder._start_window_manager"):
         app = create_app(output_dir=str(tmp_path), display=42)
         app.config["TESTING"] = True
         yield app
@@ -30,7 +31,8 @@ class TestEventsEndpoint:
         assert resp.get_json() == []
 
     def test_events_after_display_start(self, client):
-        with patch("thea.recorder.subprocess.Popen") as mock_popen:
+        with patch("thea.recorder.subprocess.Popen") as mock_popen, \
+             patch("thea.recorder.Recorder._start_window_manager"):
             mock_proc = Mock()
             mock_proc.poll.return_value = None
             mock_popen.return_value = mock_proc
@@ -72,7 +74,8 @@ class TestEventsEndpoint:
         assert len(remove_events) == 1
 
     def test_events_after_recording_start_stop(self, client):
-        with patch("thea.recorder.subprocess.Popen") as mock_popen:
+        with patch("thea.recorder.subprocess.Popen") as mock_popen, \
+             patch("thea.recorder.Recorder._start_window_manager"):
             mock_proc = Mock()
             mock_proc.poll.return_value = None
             mock_popen.return_value = mock_proc

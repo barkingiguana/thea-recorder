@@ -18,7 +18,8 @@ def app(tmp_path):
     """Create a test app with mocked subprocess calls."""
     with patch("thea.recorder.subprocess.Popen"), \
          patch("thea.recorder.subprocess.run"), \
-         patch("thea.recorder.os.path.exists", return_value=True):
+         patch("thea.recorder.os.path.exists", return_value=True), \
+         patch("thea.recorder.Recorder._start_window_manager"):
         app = create_app(output_dir=str(tmp_path), display=42)
         app.config["TESTING"] = True
         yield app
@@ -33,7 +34,8 @@ def client(app):
 def app_cors(tmp_path):
     with patch("thea.recorder.subprocess.Popen"), \
          patch("thea.recorder.subprocess.run"), \
-         patch("thea.recorder.os.path.exists", return_value=True):
+         patch("thea.recorder.os.path.exists", return_value=True), \
+         patch("thea.recorder.Recorder._start_window_manager"):
         app = create_app(output_dir=str(tmp_path), display=42, enable_cors=True)
         app.config["TESTING"] = True
         yield app
