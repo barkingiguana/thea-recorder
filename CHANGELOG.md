@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.15.0] — 2026-03-13
+
+### Features
+- feat: add window_class and fill_viewport options to launch_app()
+
+### Other
+- Merge pull request #30 from barkingiguana/feat/launch-app-fill-viewport
+
+
 ## [0.14.0] — 2026-03-12
 
 ### Features
