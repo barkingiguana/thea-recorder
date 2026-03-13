@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.19.1] — 2026-03-13
+
+### Fixes
+- fix: robust WM readiness check and retry on BadMatch focus errors
+
+### Other
+- Merge pull request #37 from barkingiguana/feat/auto-window-manager
+
+
 ## [0.19.0] — 2026-03-13
 
 ### Features
