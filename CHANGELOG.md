@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.18.0] — 2026-03-13
+
+### Features
+- feat: add terminal recording submodule at thea.terminal
+
+### Other
+- Merge pull request #33 from barkingiguana/feat/terminal-submodule
+
+
 ## [0.17.0] — 2026-03-13
 
 ### Features
