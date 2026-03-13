@@ -105,6 +105,8 @@ class Recorder:
         self._panels = {}  # name -> {"title": str, "path": str, "width": int|None, "height": int|None, "bg_color": str, "opacity": float}
         self._launched_apps = []  # Popen instances launched via launch_app()
         self._director = None  # Lazy-initialised Director instance
+        self._annotations = []
+        self._last_annotations = []
 
     # -- Display -----------------------------------------------------------
 
@@ -183,6 +185,57 @@ class Recorder:
             from .director import Director
             self._director = Director(self.display_env)
         return self._director
+
+    # -- Input convenience (delegates to Director) -------------------------
+
+    def keyboard_type(self, text: str, *, wpm: float = None):
+        """Type text with human-like rhythm. Delegates to the Director's keyboard."""
+        self.director.keyboard.type(text, wpm=wpm)
+
+    def keyboard_press(self, *keys: str):
+        """Press one or more keys. Delegates to the Director's keyboard."""
+        self.director.keyboard.press(*keys)
+
+    def mouse_move(self, x: int, y: int, *, duration: float = None):
+        """Move the mouse with human-like motion. Delegates to the Director's mouse."""
+        self.director.mouse.move(x, y, duration=duration)
+
+    def mouse_click(self, x: int, y: int = None, *, button: int = 1):
+        """Click at a position. Delegates to the Director's mouse."""
+        if y is not None:
+            self.director.mouse.click(x, y, button=button)
+        else:
+            self.director.mouse.click(x, button=button)
+
+    # -- Annotations -------------------------------------------------------
+
+    def add_annotation(self, label: str, *, time: float = None, details: str = None) -> dict:
+        """Add an annotation to the current recording.
+
+        Args:
+            label: Short label for the annotation.
+            time: Time offset in seconds. *None* uses recording_elapsed.
+            details: Optional longer description.
+
+        Returns:
+            The annotation dict.
+
+        Raises:
+            RuntimeError: If not currently recording.
+        """
+        if self._ffmpeg_proc is None:
+            raise RuntimeError("Not recording")
+        if time is None:
+            time = round(self.recording_elapsed, 3)
+        annotation = {"label": label, "time": round(time, 3)}
+        if details is not None:
+            annotation["details"] = details
+        self._annotations.append(annotation)
+        return annotation
+
+    def list_annotations(self) -> list[dict]:
+        """Return annotations for the current recording."""
+        return list(self._annotations)
 
     # -- Application launching ---------------------------------------------
 
@@ -422,6 +475,7 @@ class Recorder:
         warnings = self.validate_layout()
         os.makedirs(self._output_dir, exist_ok=True)
         self._recording_start = time.monotonic()
+        self._annotations = []
 
         safe = re.sub(r"[^\w\-.]", "_", filename)[:120]
         self._output_path = os.path.join(self._output_dir, f"{safe}.mp4")
@@ -663,6 +717,7 @@ class Recorder:
             )
 
         path = self._output_path
+        self._last_annotations = list(self._annotations)
         self._ffmpeg_proc = None
         self._output_path = None
         self._recording_start = None
