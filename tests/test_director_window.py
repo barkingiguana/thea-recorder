@@ -93,7 +93,28 @@ class TestWindow:
         w = Window("42", ENV)
         with pytest.raises(RuntimeError, match="BadMatch"):
             w.focus()
-        assert mock_activate.call_count == 5
+        assert mock_activate.call_count == 10
+
+    @patch("thea.director.window.time.sleep")
+    @patch("thea.director.window.xdotool.window_focus")
+    @patch("thea.director.window.xdotool.window_activate")
+    def test_focus_succeeds_after_many_badmatch_retries(self, mock_activate, mock_focus, mock_sleep):
+        """Regression test for #36: 5 retries insufficient when WM is slow to initialise."""
+        # Simulate BadMatch on attempts 1-6, then success on attempt 7.
+        # With the old default of 5 retries, this would raise.
+        mock_activate.side_effect = [
+            RuntimeError("X Error: BadMatch (invalid parameter attributes)"),
+            RuntimeError("X Error: BadMatch (invalid parameter attributes)"),
+            RuntimeError("X Error: BadMatch (invalid parameter attributes)"),
+            RuntimeError("X Error: BadMatch (invalid parameter attributes)"),
+            RuntimeError("X Error: BadMatch (invalid parameter attributes)"),
+            RuntimeError("X Error: BadMatch (invalid parameter attributes)"),
+            None,
+        ]
+        w = Window("42", ENV)
+        result = w.focus()
+        assert result is w
+        assert mock_activate.call_count == 7
 
 
 class TestFindWindow:

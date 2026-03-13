@@ -13,10 +13,11 @@ from thea.director.rhythm import RhythmConfig
 
 
 class TestDirectorInit:
+    @patch("thea.director.director.Director._verify_wm_focus_ready")
     @patch("thea.director.director.subprocess.run")
     @patch("thea.director.director.subprocess.Popen")
     @patch("thea.director.director.time.sleep")
-    def test_display_string(self, mock_sleep, mock_popen, mock_run):
+    def test_display_string(self, mock_sleep, mock_popen, mock_run, _verify):
         # Simulate no WM running, then WM becomes ready.
         no_wm = MagicMock(stdout="no such atom", returncode=1)
         wm_check = MagicMock(stdout="_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001", returncode=0)
@@ -45,10 +46,11 @@ class TestDirectorInit:
         # Should not start openbox since WM is detected.
         assert d._wm_proc is None
 
+    @patch("thea.director.director.Director._verify_wm_focus_ready")
     @patch("thea.director.director.time.sleep")
     @patch("thea.director.director.subprocess.Popen")
     @patch("thea.director.director.subprocess.run")
-    def test_starts_openbox_when_no_wm(self, mock_run, mock_popen, mock_sleep):
+    def test_starts_openbox_when_no_wm(self, mock_run, mock_popen, mock_sleep, _verify):
         no_wm = MagicMock(stdout="no such atom", returncode=1)
         wm_check = MagicMock(stdout="_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001", returncode=0)
         supported = MagicMock(stdout="_NET_SUPPORTED(ATOM) = _NET_WM_STATE", returncode=0)
@@ -72,6 +74,63 @@ class TestDirectorInit:
         config = RhythmConfig(wpm=120)
         d = Director(":99", rhythm=config)
         assert d.keyboard.rhythm.wpm == 120
+
+
+class TestDirectorWMReadiness:
+    """Regression tests for #36: WM readiness must verify focus actually works."""
+
+    @patch("thea.director.director.time.sleep")
+    @patch("thea.director.director.time.monotonic")
+    @patch("thea.director.director.subprocess.Popen")
+    @patch("thea.director.director.subprocess.run")
+    def test_start_wm_verifies_focus_with_test_window(self, mock_run, mock_popen, mock_mono, mock_sleep):
+        """_ensure_window_manager should create a test window and verify focus works."""
+        no_wm = MagicMock(stdout="no such atom", returncode=1)
+        wm_check = MagicMock(stdout="_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001", returncode=0)
+        supported = MagicMock(stdout="_NET_SUPPORTED(ATOM) = _NET_WM_STATE", returncode=0)
+        # xdotool search returns the test window
+        search_result = MagicMock(stdout="12345\n", returncode=0)
+        # xdotool windowactivate succeeds
+        activate_result = MagicMock(stdout="", returncode=0)
+        # xterm process mock
+        xterm_proc = MagicMock()
+        xterm_proc.poll.return_value = None
+        # openbox process mock
+        openbox_proc = MagicMock()
+        mock_popen.side_effect = [openbox_proc, xterm_proc]
+        mock_run.side_effect = [no_wm, wm_check, supported, search_result, activate_result]
+        mock_mono.side_effect = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        d = Director(":99")
+        # Verify xterm was launched for the focus test
+        assert mock_popen.call_count == 2
+        xterm_call_args = mock_popen.call_args_list[1][0][0]
+        assert "xterm" in xterm_call_args
+        # Verify the test window was cleaned up
+        xterm_proc.terminate.assert_called_once()
+
+    @patch("thea.director.director.time.sleep")
+    @patch("thea.director.director.time.monotonic")
+    @patch("thea.director.director.subprocess.Popen")
+    @patch("thea.director.director.subprocess.run")
+    def test_start_wm_retries_focus_verification(self, mock_run, mock_popen, mock_mono, mock_sleep):
+        """Focus verification should retry if the first activate attempt fails."""
+        no_wm = MagicMock(stdout="no such atom", returncode=1)
+        wm_check = MagicMock(stdout="_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001", returncode=0)
+        supported = MagicMock(stdout="_NET_SUPPORTED(ATOM) = _NET_WM_STATE", returncode=0)
+        # xdotool search: first returns nothing, then finds window
+        search_empty = MagicMock(stdout="", returncode=1)
+        search_found = MagicMock(stdout="12345\n", returncode=0)
+        # xdotool windowactivate: first fails with BadMatch, then succeeds
+        activate_fail = MagicMock(stdout="", returncode=1, stderr="BadMatch")
+        activate_ok = MagicMock(stdout="", returncode=0)
+        xterm_proc = MagicMock()
+        xterm_proc.poll.return_value = None
+        openbox_proc = MagicMock()
+        mock_popen.side_effect = [openbox_proc, xterm_proc]
+        mock_run.side_effect = [no_wm, wm_check, supported, search_empty, search_found, activate_fail, activate_ok]
+        mock_mono.side_effect = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+        d = Director(":99")
+        xterm_proc.terminate.assert_called_once()
 
 
 class TestDirectorProperties:
@@ -136,10 +195,11 @@ class TestDirectorScreenshot:
 
 
 class TestDirectorCleanup:
+    @patch("thea.director.director.Director._verify_wm_focus_ready")
     @patch("thea.director.director.time.sleep")
     @patch("thea.director.director.subprocess.Popen")
     @patch("thea.director.director.subprocess.run")
-    def test_cleanup_terminates_wm(self, mock_run, mock_popen, mock_sleep):
+    def test_cleanup_terminates_wm(self, mock_run, mock_popen, mock_sleep, _verify):
         no_wm = MagicMock(stdout="no such atom", returncode=1)
         wm_check = MagicMock(stdout="_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001", returncode=0)
         supported = MagicMock(stdout="_NET_SUPPORTED(ATOM) = _NET_WM_STATE", returncode=0)
@@ -157,10 +217,11 @@ class TestDirectorCleanup:
         d = Director(":99")
         d.cleanup()  # Should not raise.
 
+    @patch("thea.director.director.Director._verify_wm_focus_ready")
     @patch("thea.director.director.time.sleep")
     @patch("thea.director.director.subprocess.Popen")
     @patch("thea.director.director.subprocess.run")
-    def test_cleanup_force_kill_on_timeout(self, mock_run, mock_popen, mock_sleep):
+    def test_cleanup_force_kill_on_timeout(self, mock_run, mock_popen, mock_sleep, _verify):
         no_wm = MagicMock(stdout="no such atom", returncode=1)
         wm_check = MagicMock(stdout="_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001", returncode=0)
         supported = MagicMock(stdout="_NET_SUPPORTED(ATOM) = _NET_WM_STATE", returncode=0)

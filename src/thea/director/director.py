@@ -105,6 +105,59 @@ class Director:
                 break
             time.sleep(0.1)
 
+        # Verify the WM can actually handle focus requests by launching a
+        # throwaway window, focusing it, then killing it.  EWMH properties
+        # appear before openbox is ready to manage focus (#36).
+        self._verify_wm_focus_ready(deadline)
+
+    def _verify_wm_focus_ready(self, deadline: float) -> None:
+        """Launch a test window and verify focus works before returning.
+
+        This catches the race where openbox advertises EWMH properties but
+        cannot yet handle X_SetInputFocus requests (#36).
+        """
+        test_proc = subprocess.Popen(
+            ["xterm", "-geometry", "1x1+0+0", "-e", "sleep 10"],
+            env=self._env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            # Wait for the test window to appear.
+            wid = None
+            while time.monotonic() < deadline:
+                result = subprocess.run(
+                    ["xdotool", "search", "--pid", str(test_proc.pid)],
+                    env=self._env,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    wid = result.stdout.strip().split("\n")[0]
+                    break
+                time.sleep(0.1)
+
+            if wid is None:
+                return  # Could not find test window; skip verification.
+
+            # Try to focus the test window — retry until it works.
+            while time.monotonic() < deadline:
+                result = subprocess.run(
+                    ["xdotool", "windowactivate", "--sync", wid],
+                    env=self._env,
+                    capture_output=True,
+                    text=True,
+                )
+                if result.returncode == 0:
+                    break
+                time.sleep(0.2)
+        finally:
+            test_proc.terminate()
+            try:
+                test_proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                test_proc.kill()
+
     @property
     def env(self) -> dict:
         """The environment dict with ``DISPLAY`` set."""
