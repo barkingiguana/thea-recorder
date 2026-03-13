@@ -186,7 +186,15 @@ class Recorder:
 
     # -- Application launching ---------------------------------------------
 
-    def launch_app(self, cmd: list[str], *, env: dict = None, **kwargs) -> subprocess.Popen:
+    def launch_app(
+        self,
+        cmd: list[str],
+        *,
+        env: dict = None,
+        window_class: str = None,
+        fill_viewport: bool = False,
+        **kwargs,
+    ) -> subprocess.Popen:
         """Launch an application on the recorder's Xvfb display.
 
         The process is tracked and will be terminated automatically when
@@ -201,6 +209,12 @@ class Recorder:
             cmd: Command and arguments, e.g. ``["chromium", "--no-sandbox"]``.
             env: Extra environment variables.  These are merged on top of
                 :attr:`display_env`.  If *None*, only ``DISPLAY`` is added.
+            window_class: WM_CLASS to search for after launch.  Used together
+                with *fill_viewport* to automatically position and resize the
+                window.
+            fill_viewport: If *True* and *window_class* is provided, the
+                launched window is found by class, focused, moved to (0, 0),
+                and resized to fill the display viewport.
             **kwargs: Passed through to :class:`subprocess.Popen`.
 
         Returns:
@@ -212,6 +226,13 @@ class Recorder:
         proc = subprocess.Popen(cmd, env=merged_env, **kwargs)
         self._launched_apps.append(proc)
         logger.debug("Launched app (pid %d): %s", proc.pid, cmd)
+
+        if window_class and fill_viewport:
+            w, h = self._display_size.split("x")
+            win = self.director.window_by_class(window_class)
+            win.focus().move(0, 0).resize(int(w), int(h))
+            time.sleep(0.3)
+
         return proc
 
     # -- Panels ------------------------------------------------------------
