@@ -32,7 +32,7 @@ class Window:
         """The X11 window ID."""
         return self._id
 
-    def focus(self, *, _retries: int = 5) -> Window:
+    def focus(self, *, _retries: int = 10) -> Window:
         """Activate and focus this window (raise to front).
 
         Retries on ``BadMatch`` X errors which can occur when the window

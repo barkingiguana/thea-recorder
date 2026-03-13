@@ -170,9 +170,10 @@ class TestStartDisplay:
 
 
 class TestWindowManager:
+    @patch("thea.recorder.Recorder._verify_wm_focus_ready")
     @patch("thea.recorder.time.sleep")
     @patch("thea.recorder.subprocess.Popen")
-    def test_start_window_manager_starts_openbox(self, mock_popen, _sleep):
+    def test_start_window_manager_starts_openbox(self, mock_popen, _sleep, _verify):
         wm_proc = Mock()
         mock_popen.return_value = wm_proc
         wm_check = Mock()
@@ -189,9 +190,10 @@ class TestWindowManager:
         assert popen_args == ["openbox"]
         assert r._wm_proc is wm_proc
 
+    @patch("thea.recorder.Recorder._verify_wm_focus_ready")
     @patch("thea.recorder.time.sleep")
     @patch("thea.recorder.subprocess.Popen")
-    def test_start_window_manager_polls_until_ready(self, mock_popen, mock_sleep):
+    def test_start_window_manager_polls_until_ready(self, mock_popen, mock_sleep, _verify):
         mock_popen.return_value = Mock()
         not_ready = Mock()
         not_ready.stdout = ""
