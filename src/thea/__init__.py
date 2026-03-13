@@ -7,6 +7,9 @@ from .layout import Region, validate_regions, generate_testcard
 # Director
 from .director import Director, MotionConfig, RhythmConfig
 
+# Terminal
+from .terminal import Terminal
+
 # Recorder & server components
 from .recorder import Recorder, PANEL_HEIGHT, LINE_HEIGHT
 from .report import generate_report
@@ -19,6 +22,8 @@ __all__ = [
     "Region", "validate_regions", "generate_testcard",
     # Director
     "Director", "MotionConfig", "RhythmConfig",
+    # Terminal
+    "Terminal",
     # Recorder & server
     "Recorder", "PANEL_HEIGHT", "LINE_HEIGHT",
     "generate_report",
