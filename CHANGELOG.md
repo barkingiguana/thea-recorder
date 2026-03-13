@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.19.0] — 2026-03-13
+
+### Features
+- feat: start openbox window manager automatically in start_display()
+
+### Other
+- Merge pull request #35 from barkingiguana/feat/auto-window-manager
+
+
 ## [0.18.0] — 2026-03-13
 
 ### Features
