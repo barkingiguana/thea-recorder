@@ -99,6 +99,7 @@ class Recorder:
             self._font_bold = font_bold
 
         self._xvfb_proc = None
+        self._wm_proc = None
         self._ffmpeg_proc = None
         self._output_path = None
         self._recording_start = None
@@ -165,8 +166,48 @@ class Recorder:
         )
         logger.debug("Xvfb started on %s (%sx%s)", self.display_string, w, total_h)
 
+        # Start a window manager so xdotool windowfocus/windowactivate work.
+        self._start_window_manager(env)
+
+    def _start_window_manager(self, env: dict) -> None:
+        """Start openbox and wait for it to be ready.
+
+        Polls for the EWMH ``_NET_SUPPORTING_WM_CHECK`` property which
+        openbox sets once it is ready to manage windows.
+        """
+        self._wm_proc = subprocess.Popen(
+            ["openbox"],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        # Poll until the WM advertises EWMH support.
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            result = subprocess.run(
+                ["xprop", "-root", "_NET_SUPPORTING_WM_CHECK"],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            if "window id" in result.stdout.lower():
+                break
+            time.sleep(0.1)
+        logger.debug("Window manager started on %s", self.display_string)
+
+    def _stop_window_manager(self) -> None:
+        """Terminate the window manager if we started one."""
+        if self._wm_proc:
+            self._wm_proc.terminate()
+            try:
+                self._wm_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._wm_proc.kill()
+            self._wm_proc = None
+
     def stop_display(self):
-        """Terminate Xvfb."""
+        """Terminate the window manager and Xvfb."""
+        self._stop_window_manager()
         if self._xvfb_proc:
             self._xvfb_proc.terminate()
             try:

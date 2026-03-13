@@ -73,10 +73,11 @@ class TestFonts:
 
 
 class TestStartDisplay:
+    @patch("thea.recorder.Recorder._start_window_manager")
     @patch("thea.recorder.subprocess.run")
     @patch("thea.recorder.os.path.exists", return_value=True)
     @patch("thea.recorder.subprocess.Popen")
-    def test_with_panels_adds_panel_height(self, mock_popen, _exists, _run):
+    def test_with_panels_adds_panel_height(self, mock_popen, _exists, _run, _wm):
         r = Recorder(display=42, display_size="1920x1080")
         r.add_panel("header", title="Header")
         r.start_display()
@@ -88,10 +89,11 @@ class TestStartDisplay:
         assert f"1920x{expected_h}x24" in args
         r.cleanup()
 
+    @patch("thea.recorder.Recorder._start_window_manager")
     @patch("thea.recorder.subprocess.run")
     @patch("thea.recorder.os.path.exists", return_value=True)
     @patch("thea.recorder.subprocess.Popen")
-    def test_without_panels_still_allocates_panel_height(self, mock_popen, _exists, _run):
+    def test_without_panels_still_allocates_panel_height(self, mock_popen, _exists, _run, _wm):
         r = Recorder(display=42, display_size="1920x1080")
         r.start_display()
 
@@ -99,10 +101,11 @@ class TestStartDisplay:
         expected_h = 1080 + PANEL_HEIGHT
         assert f"1920x{expected_h}x24" in args
 
+    @patch("thea.recorder.Recorder._start_window_manager")
     @patch("thea.recorder.subprocess.run")
     @patch("thea.recorder.os.path.exists", return_value=True)
     @patch("thea.recorder.subprocess.Popen")
-    def test_sets_cursor(self, _popen, _exists, mock_run):
+    def test_sets_cursor(self, _popen, _exists, mock_run, _wm):
         r = Recorder(display=42)
         r.start_display()
 
@@ -111,10 +114,11 @@ class TestStartDisplay:
         assert "xsetroot" in args
         assert "-cursor_name" in args
 
+    @patch("thea.recorder.Recorder._start_window_manager")
     @patch("thea.recorder.subprocess.run")
     @patch("thea.recorder.os.path.exists", return_value=True)
     @patch("thea.recorder.subprocess.Popen")
-    def test_stop_display_terminates_xvfb(self, mock_popen, _exists, _run):
+    def test_stop_display_terminates_xvfb(self, mock_popen, _exists, _run, _wm):
         proc = Mock()
         mock_popen.return_value = proc
         r = Recorder()
@@ -128,10 +132,11 @@ class TestStartDisplay:
         r = Recorder()
         r.stop_display()  # Should not raise
 
+    @patch("thea.recorder.Recorder._start_window_manager")
     @patch("thea.recorder.subprocess.run")
     @patch("thea.recorder.os.path.exists", return_value=True)
     @patch("thea.recorder.subprocess.Popen")
-    def test_custom_resolution(self, mock_popen, _exists, _run):
+    def test_custom_resolution(self, mock_popen, _exists, _run, _wm):
         r = Recorder(display=1, display_size="1280x720")
         r.start_display()
 
@@ -139,15 +144,124 @@ class TestStartDisplay:
         expected_h = 720 + PANEL_HEIGHT
         assert f"1280x{expected_h}x24" in args
 
+    @patch("thea.recorder.Recorder._start_window_manager")
     @patch("thea.recorder.subprocess.run")
     @patch("thea.recorder.os.path.exists", return_value=True)
     @patch("thea.recorder.subprocess.Popen")
-    def test_display_env_passed_to_xsetroot(self, _popen, _exists, mock_run):
+    def test_display_env_passed_to_xsetroot(self, _popen, _exists, mock_run, _wm):
         r = Recorder(display=77)
         r.start_display()
 
         call_kwargs = mock_run.call_args[1]
         assert call_kwargs["env"]["DISPLAY"] == ":77"
+
+    @patch("thea.recorder.Recorder._start_window_manager")
+    @patch("thea.recorder.subprocess.run")
+    @patch("thea.recorder.os.path.exists", return_value=True)
+    @patch("thea.recorder.subprocess.Popen")
+    def test_start_display_calls_start_window_manager(self, _popen, _exists, _run, mock_wm):
+        r = Recorder(display=42)
+        r.start_display()
+
+        mock_wm.assert_called_once()
+        # env dict should have the correct DISPLAY
+        env_arg = mock_wm.call_args[0][0]
+        assert env_arg["DISPLAY"] == ":42"
+
+
+class TestWindowManager:
+    @patch("thea.recorder.time.sleep")
+    @patch("thea.recorder.subprocess.Popen")
+    def test_start_window_manager_starts_openbox(self, mock_popen, _sleep):
+        wm_proc = Mock()
+        mock_popen.return_value = wm_proc
+        run_result = Mock()
+        run_result.stdout = "_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001"
+        with patch("thea.recorder.subprocess.run", return_value=run_result):
+            r = Recorder(display=42)
+            env = r.display_env
+            r._start_window_manager(env)
+
+        # openbox was started
+        popen_args = mock_popen.call_args[0][0]
+        assert popen_args == ["openbox"]
+        assert r._wm_proc is wm_proc
+
+    @patch("thea.recorder.time.sleep")
+    @patch("thea.recorder.subprocess.Popen")
+    def test_start_window_manager_polls_until_ready(self, mock_popen, mock_sleep):
+        mock_popen.return_value = Mock()
+        not_ready = Mock()
+        not_ready.stdout = ""
+        ready = Mock()
+        ready.stdout = "_NET_SUPPORTING_WM_CHECK(WINDOW): window id # 0x200001"
+        with patch("thea.recorder.subprocess.run", side_effect=[not_ready, not_ready, ready]):
+            r = Recorder(display=42)
+            r._start_window_manager(r.display_env)
+
+        # Slept between polls
+        assert mock_sleep.call_count == 2
+
+    def test_stop_window_manager_terminates_proc(self):
+        r = Recorder()
+        proc = Mock()
+        proc.poll.return_value = None
+        r._wm_proc = proc
+        r._stop_window_manager()
+
+        proc.terminate.assert_called_once()
+        proc.wait.assert_called_once()
+        assert r._wm_proc is None
+
+    def test_stop_window_manager_noop_when_none(self):
+        r = Recorder()
+        r._stop_window_manager()  # Should not raise
+
+    def test_stop_window_manager_force_kills_on_timeout(self):
+        r = Recorder()
+        proc = Mock()
+        proc.wait.side_effect = subprocess.TimeoutExpired("openbox", 5)
+        r._wm_proc = proc
+        r._stop_window_manager()
+
+        proc.terminate.assert_called_once()
+        proc.kill.assert_called_once()
+        assert r._wm_proc is None
+
+    @patch("thea.recorder.Recorder._start_window_manager")
+    @patch("thea.recorder.subprocess.run")
+    @patch("thea.recorder.os.path.exists", return_value=True)
+    @patch("thea.recorder.subprocess.Popen")
+    def test_stop_display_stops_wm_before_xvfb(self, mock_popen, _exists, _run, _wm):
+        xvfb_proc = Mock()
+        mock_popen.return_value = xvfb_proc
+        wm_proc = Mock()
+
+        r = Recorder()
+        r.start_display()
+        r._wm_proc = wm_proc
+
+        r.stop_display()
+
+        wm_proc.terminate.assert_called_once()
+        xvfb_proc.terminate.assert_called_once()
+
+    @patch("thea.recorder.Recorder._start_window_manager")
+    @patch("thea.recorder.subprocess.run")
+    @patch("thea.recorder.os.path.exists", return_value=True)
+    @patch("thea.recorder.subprocess.Popen")
+    def test_cleanup_stops_wm(self, mock_popen, _exists, _run, _wm):
+        xvfb_proc = Mock()
+        mock_popen.return_value = xvfb_proc
+        wm_proc = Mock()
+
+        r = Recorder()
+        r.start_display()
+        r._wm_proc = wm_proc
+
+        r.cleanup()
+
+        wm_proc.terminate.assert_called_once()
 
 
 class TestDisplayEnv:
@@ -674,10 +788,11 @@ class TestRecordingElapsed:
 
 
 class TestCleanup:
+    @patch("thea.recorder.Recorder._start_window_manager")
     @patch("thea.recorder.subprocess.run")
     @patch("thea.recorder.os.path.exists", return_value=True)
     @patch("thea.recorder.subprocess.Popen")
-    def test_cleanup_stops_everything(self, mock_popen, _exists, _run, tmp_path):
+    def test_cleanup_stops_everything(self, mock_popen, _exists, _run, _wm, tmp_path):
         ffmpeg_proc = Mock()
         ffmpeg_proc.returncode = 0
         ffmpeg_proc.stderr = None

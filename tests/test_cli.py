@@ -19,7 +19,8 @@ def mock_server(tmp_path):
     """Start a real Flask app on a random port for CLI testing."""
     with patch("thea.recorder.subprocess.Popen"), \
          patch("thea.recorder.subprocess.run"), \
-         patch("thea.recorder.os.path.exists", return_value=True):
+         patch("thea.recorder.os.path.exists", return_value=True), \
+         patch("thea.recorder.Recorder._start_window_manager"):
         from thea.server import create_app
         app = create_app(output_dir=str(tmp_path), display=42)
         app.config["TESTING"] = True

@@ -11,7 +11,8 @@ from thea.server import create_app
 def app(tmp_path):
     with patch("thea.recorder.subprocess.Popen"), \
          patch("thea.recorder.subprocess.run"), \
-         patch("thea.recorder.os.path.exists", return_value=True):
+         patch("thea.recorder.os.path.exists", return_value=True), \
+         patch("thea.recorder.Recorder._start_window_manager"):
         app = create_app(output_dir=str(tmp_path), display=42)
         app.config["TESTING"] = True
         yield app
@@ -23,7 +24,8 @@ def client(app):
 
 
 def _start_recording(client, name="demo"):
-    with patch("thea.recorder.subprocess.Popen") as mock_popen:
+    with patch("thea.recorder.subprocess.Popen") as mock_popen, \
+         patch("thea.recorder.Recorder._start_window_manager"):
         mock_proc = Mock()
         mock_proc.poll.return_value = None
         mock_proc.returncode = 0
@@ -170,7 +172,8 @@ class TestSessionAnnotations:
             return client.post("/sessions", json={"name": name})
 
     def _start_session_recording(self, client, session_name, rec_name="demo"):
-        with patch("thea.recorder.subprocess.Popen") as mock_popen:
+        with patch("thea.recorder.subprocess.Popen") as mock_popen, \
+             patch("thea.recorder.Recorder._start_window_manager"):
             mock_proc = Mock()
             mock_proc.poll.return_value = None
             mock_popen.return_value = mock_proc
