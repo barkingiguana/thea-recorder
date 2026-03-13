@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.17.0] — 2026-03-13
+
+### Features
+- feat: add step tracker context manager for generate_report timelines
+
+### Other
+- Merge pull request #32 from barkingiguana/feat/step-tracker
+
+
 ## [0.16.0] — 2026-03-13
 
 ### Features
