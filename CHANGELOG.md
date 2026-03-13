@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.16.0] — 2026-03-13
+
+### Features
+- feat: add keyboard, mouse, and annotation methods to Recorder for library-mode parity
+
+### Other
+- Merge pull request #31 from barkingiguana/feat/library-mode-parity
+
+
 ## [0.14.0] — 2026-03-12
 
 ### Features
