@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.19.2] — 2026-03-13
+
+### Fixes
+- fix: verify WM focus readiness with test window before returning (#36)
+
+### Other
+- Merge pull request #38 from barkingiguana/feat/auto-window-manager
+
+
 ## [0.19.1] — 2026-03-13
 
 ### Fixes
