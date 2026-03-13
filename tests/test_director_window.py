@@ -61,6 +61,40 @@ class TestWindow:
         mock_move.assert_called_once()
         mock_resize.assert_called_once()
 
+    @patch("thea.director.window.time.sleep")
+    @patch("thea.director.window.xdotool.window_focus")
+    @patch("thea.director.window.xdotool.window_activate")
+    def test_focus_retries_on_badmatch(self, mock_activate, mock_focus, mock_sleep):
+        mock_activate.side_effect = [
+            RuntimeError("X Error: BadMatch (invalid parameter attributes)"),
+            RuntimeError("X Error: BadMatch (invalid parameter attributes)"),
+            None,
+        ]
+        w = Window("42", ENV)
+        result = w.focus()
+        assert result is w
+        assert mock_activate.call_count == 3
+
+    @patch("thea.director.window.time.sleep")
+    @patch("thea.director.window.xdotool.window_focus")
+    @patch("thea.director.window.xdotool.window_activate")
+    def test_focus_raises_non_badmatch(self, mock_activate, mock_focus, mock_sleep):
+        mock_activate.side_effect = RuntimeError("xdotool failed (exit 1)")
+        w = Window("42", ENV)
+        with pytest.raises(RuntimeError, match="xdotool failed"):
+            w.focus()
+        assert mock_activate.call_count == 1
+
+    @patch("thea.director.window.time.sleep")
+    @patch("thea.director.window.xdotool.window_focus")
+    @patch("thea.director.window.xdotool.window_activate")
+    def test_focus_raises_after_max_retries(self, mock_activate, mock_focus, mock_sleep):
+        mock_activate.side_effect = RuntimeError("BadMatch")
+        w = Window("42", ENV)
+        with pytest.raises(RuntimeError, match="BadMatch"):
+            w.focus()
+        assert mock_activate.call_count == 5
+
 
 class TestFindWindow:
     @patch("thea.director.window.time.sleep")

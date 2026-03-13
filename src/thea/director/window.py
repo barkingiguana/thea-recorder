@@ -32,15 +32,25 @@ class Window:
         """The X11 window ID."""
         return self._id
 
-    def focus(self) -> Window:
+    def focus(self, *, _retries: int = 5) -> Window:
         """Activate and focus this window (raise to front).
+
+        Retries on ``BadMatch`` X errors which can occur when the window
+        manager has not fully initialised yet.
 
         Returns self for chaining.
         """
-        xdotool.window_activate(self._id, self._env)
-        xdotool.window_focus(self._id, self._env)
-        time.sleep(0.2)
-        return self
+        for attempt in range(_retries):
+            try:
+                xdotool.window_activate(self._id, self._env)
+                xdotool.window_focus(self._id, self._env)
+                time.sleep(0.2)
+                return self
+            except RuntimeError as exc:
+                if "BadMatch" not in str(exc) or attempt == _retries - 1:
+                    raise
+                time.sleep(0.5 * (attempt + 1))
+        return self  # pragma: no cover
 
     def move(self, x: int, y: int) -> Window:
         """Move the window to ``(x, y)``.  Returns self for chaining."""
