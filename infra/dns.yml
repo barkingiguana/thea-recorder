@@ -32,7 +32,7 @@ Resources:
       Type: TXT
       TTL: 300
       ResourceRecords:
-        - '"dm-verify=wXi7uNukcrvEmPq2sD7ifAS_yfh_0ALvqiSJxvIQyVw"'
+        - '"dm-verify=Xu0tRlsQkukXwSqkeptKGmIaMTC30Crn2d30o_Ud9js"'
 
   # SES domain verification
   SESTxtRecord:
