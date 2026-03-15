@@ -1,8 +1,8 @@
 """Product demo orchestration with thea-recorder.
 
 Records a scripted walkthrough of an application and produces a
-polished MP4 — no test framework required.  Run this from a CI pipeline
-or a developer's laptop to generate a fresh demo video on demand.
+polished MP4 (or GIF) — no test framework required.  Run this from a CI
+pipeline or a developer's laptop to generate a fresh demo video on demand.
 
 Requirements:
   - thea serve running  (thea serve --port 9123 --output-dir ./recordings)

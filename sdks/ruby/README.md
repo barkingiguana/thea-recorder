@@ -41,6 +41,21 @@ puts "Recorded #{result['elapsed']}s to #{result['path']}"
 # Download the recording
 client.download_recording("demo", "/tmp/demo.mp4")
 
+# Stop recording and generate a GIF automatically
+client.start_recording(name: "gif-demo")
+# ... do work ...
+client.stop_recording(gif: true, gif_fps: 15, gif_width: 640)
+
+# Convert an existing recording to GIF
+client.convert_to_gif("demo", fps: 10, width: 720)
+
+# Download in different formats (mp4, gif, webm)
+client.download_recording("demo", "/tmp/demo.gif", format: "gif")
+client.download_recording("demo", "/tmp/demo.webm", format: "webm")
+
+# Stop recording with multiple output formats
+client.stop_recording(output_formats: ["mp4", "gif", "webm"])
+
 # Clean up
 client.remove_panel("editor")
 client.stop_display
@@ -59,6 +74,16 @@ client.recording("demo") do |r|
 end
 # Recording is stopped and panel is removed automatically,
 # even if an exception is raised inside the block.
+
+# Block syntax with GIF output
+client.recording("demo", gif: true, gif_fps: 15) do |r|
+  # ... do work ...
+end
+
+# Block syntax with multiple output formats
+client.recording("demo", output_formats: ["mp4", "webm"]) do |r|
+  # ... do work ...
+end
 ```
 
 ### Error handling
@@ -91,16 +116,17 @@ client = Recorder::Client.new("http://localhost:3000", timeout: 60)
 | `remove_panel(name)` | DELETE /panels/{name} | Remove a panel |
 | `list_panels` | GET /panels | List all panels |
 | `start_recording(name:)` | POST /recording/start | Start recording |
-| `stop_recording` | POST /recording/stop | Stop recording |
+| `stop_recording(gif:, gif_fps:, gif_width:, output_formats:)` | POST /recording/stop | Stop recording (optionally generate GIF/other formats) |
 | `recording_elapsed` | GET /recording/elapsed | Get elapsed time |
 | `recording_status` | GET /recording/status | Get recording status |
 | `list_recordings` | GET /recordings | List all recordings |
-| `download_recording(name, path)` | GET /recordings/{name} | Download MP4 to path |
+| `convert_to_gif(name, fps:, width:)` | POST /recordings/{name}/gif | Convert recording to GIF |
+| `download_recording(name, path, format:)` | GET /recordings/{name} | Download recording to path (format: mp4, gif, webm) |
 | `recording_info(name)` | GET /recordings/{name}/info | Get recording metadata |
 | `health` | GET /health | Health check |
 | `cleanup` | POST /cleanup | Clean up resources |
 | `wait_until_ready(timeout:)` | GET /health (polling) | Wait for server. Called automatically on first API call. |
-| `recording(name) { \|r\| ... }` | -- | Block with auto stop |
+| `recording(name, gif:, output_formats:) { \|r\| ... }` | -- | Block with auto stop (supports GIF/format options) |
 | `with_panel(name, ...) { ... }` | -- | Block with auto remove |
 
 ## Development

@@ -74,9 +74,11 @@ type Health struct {
 
 // RecordingResult is the payload returned by POST /recording/stop.
 type RecordingResult struct {
-	Path    string  `json:"path"`
-	Elapsed float64 `json:"elapsed"`
-	Name    string  `json:"name"`
+	Path       string            `json:"path"`
+	Elapsed    float64           `json:"elapsed"`
+	Name       string            `json:"name"`
+	GifPath    string            `json:"gif_path,omitempty"`
+	ExtraPaths map[string]string `json:"extra_paths,omitempty"`
 }
 
 // RecordingStatus is the payload returned by GET /recording/status.
@@ -88,10 +90,15 @@ type RecordingStatus struct {
 
 // RecordingInfo describes a single recording file.
 type RecordingInfo struct {
-	Name    string  `json:"name"`
-	Path    string  `json:"path"`
-	Size    int64   `json:"size"`
-	Created string  `json:"created"`
+	Name             string   `json:"name"`
+	Path             string   `json:"path"`
+	Size             int64    `json:"size"`
+	Created          string   `json:"created"`
+	GifPath          string   `json:"gif_path,omitempty"`
+	GifSize          int64    `json:"gif_size,omitempty"`
+	WebmPath         string   `json:"webm_path,omitempty"`
+	WebmSize         int64    `json:"webm_size,omitempty"`
+	FormatsAvailable []string `json:"formats_available,omitempty"`
 }
 
 // CompositionHighlight describes a highlight applied to a recording within a
@@ -349,6 +356,14 @@ func (c *Client) WithPanel(ctx context.Context, name, title string, width int, h
 // Recording
 // ---------------------------------------------------------------------------
 
+// StopRecordingOptions configures additional output formats when stopping.
+type StopRecordingOptions struct {
+	GIF           bool     `json:"gif,omitempty"`
+	GIFFps        int      `json:"gif_fps,omitempty"`
+	GIFWidth      int      `json:"gif_width,omitempty"`
+	OutputFormats []string `json:"output_formats,omitempty"`
+}
+
 // StartRecording begins recording (POST /recording/start).
 func (c *Client) StartRecording(ctx context.Context, name string) (*StartRecordingResult, error) {
 	body := map[string]any{"name": name}
@@ -360,12 +375,28 @@ func (c *Client) StartRecording(ctx context.Context, name string) (*StartRecordi
 }
 
 // StopRecording stops the active recording (POST /recording/stop).
-func (c *Client) StopRecording(ctx context.Context) (*RecordingResult, error) {
+// Optional StopRecordingOptions can request additional output formats (e.g. GIF).
+func (c *Client) StopRecording(ctx context.Context, opts ...StopRecordingOptions) (*RecordingResult, error) {
+	var body any
+	if len(opts) > 0 {
+		body = opts[0]
+	}
 	var result RecordingResult
-	if err := c.doJSON(ctx, http.MethodPost, "/recording/stop", nil, http.StatusOK, &result); err != nil {
+	if err := c.doJSON(ctx, http.MethodPost, "/recording/stop", body, http.StatusOK, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
+}
+
+// ConvertToGIF converts an existing recording to GIF
+// (POST /recordings/{name}/gif).
+func (c *Client) ConvertToGIF(ctx context.Context, name string, fps, width int) (map[string]any, error) {
+	body := map[string]any{"fps": fps, "width": width}
+	var result map[string]any
+	if err := c.doJSON(ctx, http.MethodPost, "/recordings/"+name+"/gif", body, http.StatusCreated, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // RecordingElapsed returns the elapsed time of the current recording
@@ -436,7 +467,7 @@ func (c *Client) RecordingScreenshot(ctx context.Context, name string, timeOffse
 	return c.doRawGet(ctx, path)
 }
 
-// DownloadRecording streams the MP4 for the named recording into w
+// DownloadRecording streams the recording for the named recording into w
 // (GET /recordings/{name}).
 func (c *Client) DownloadRecording(ctx context.Context, name string, w io.Writer) error {
 	if err := c.ensureReady(ctx); err != nil {
@@ -473,6 +504,30 @@ func (c *Client) DownloadRecordingToFile(ctx context.Context, name, filePath str
 	return f.Close()
 }
 
+// DownloadRecordingFormat streams a recording in the given format into w
+// (GET /recordings/{name}?format=...). Format can be "mp4", "gif", or "webm".
+func (c *Client) DownloadRecordingFormat(ctx context.Context, name, format string, w io.Writer) error {
+	if err := c.ensureReady(ctx); err != nil {
+		return err
+	}
+	u := fmt.Sprintf("%s/recordings/%s?format=%s", c.baseURL, name, format)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+		body, _ := io.ReadAll(resp.Body)
+		return &RecorderError{StatusCode: resp.StatusCode, Status: resp.Status, Body: string(body)}
+	}
+	_, err = io.Copy(w, resp.Body)
+	return err
+}
+
 // Recording is a context-manager-style helper. It starts a recording and
 // returns a stop function. Calling stop (or deferring it) will stop the
 // recording and return the result.
@@ -480,12 +535,12 @@ func (c *Client) DownloadRecordingToFile(ctx context.Context, name, filePath str
 //	stop, err := client.Recording(ctx, "demo")
 //	if err != nil { ... }
 //	defer stop()
-func (c *Client) Recording(ctx context.Context, name string) (stop func() (*RecordingResult, error), err error) {
+func (c *Client) Recording(ctx context.Context, name string, opts ...StopRecordingOptions) (stop func() (*RecordingResult, error), err error) {
 	if _, err := c.StartRecording(ctx, name); err != nil {
 		return nil, err
 	}
 	return func() (*RecordingResult, error) {
-		return c.StopRecording(ctx)
+		return c.StopRecording(ctx, opts...)
 	}, nil
 }
 

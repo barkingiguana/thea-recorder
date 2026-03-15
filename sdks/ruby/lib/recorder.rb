@@ -78,8 +78,17 @@ module Recorder
       post("/recording/start", name: name)
     end
 
-    def stop_recording
-      post("/recording/stop")
+    def stop_recording(gif: false, gif_fps: 10, gif_width: 720, output_formats: nil)
+      body = {}
+      body[:gif] = true if gif
+      body[:gif_fps] = gif_fps if gif
+      body[:gif_width] = gif_width if gif
+      body[:output_formats] = output_formats if output_formats
+      post("/recording/stop", body.empty? ? nil : body)
+    end
+
+    def convert_to_gif(name, fps: 10, width: 720)
+      post("/recordings/#{encode(name)}/gif", fps: fps, width: width)
     end
 
     def recording_elapsed
@@ -101,11 +110,11 @@ module Recorder
       get("/recording/annotations")
     end
 
-    def recording(name)
+    def recording(name, gif: false, gif_fps: 10, gif_width: 720, output_formats: nil)
       start_recording(name: name)
       yield self
     ensure
-      stop_recording
+      stop_recording(gif: gif, gif_fps: gif_fps, gif_width: gif_width, output_formats: output_formats)
     end
 
     # Recordings
@@ -114,8 +123,9 @@ module Recorder
       get("/recordings")
     end
 
-    def download_recording(name, path)
-      response = raw_get("/recordings/#{encode(name)}")
+    def download_recording(name, path, format: "mp4")
+      query = format != "mp4" ? "?format=#{encode(format)}" : ""
+      response = raw_get("/recordings/#{encode(name)}#{query}")
       File.binwrite(path, response.body)
       path
     end

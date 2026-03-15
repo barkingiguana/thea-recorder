@@ -58,6 +58,20 @@ export interface StopRecordingResponse {
   path: string;
   elapsed: number;
   name: string;
+  gif_path?: string;
+  extra_paths?: Record<string, string>;
+}
+
+/** Options for stopping a recording with additional output formats. */
+export interface StopRecordingOptions {
+  /** Also produce a GIF version. */
+  gif?: boolean;
+  /** GIF frame rate (default 10). */
+  gif_fps?: number;
+  /** GIF width in pixels (default 720). */
+  gif_width?: number;
+  /** Additional output formats to produce (e.g. ["gif", "webm"]). */
+  output_formats?: string[];
 }
 
 /** Response from GET /recording/elapsed. */
@@ -78,6 +92,11 @@ export interface RecordingInfo {
   path: string;
   size: number;
   created: string;
+  gif_path?: string;
+  gif_size?: number;
+  webm_path?: string;
+  webm_size?: number;
+  formats_available?: string[];
 }
 
 /** Response from GET /health. */
@@ -356,8 +375,19 @@ export class RecorderClient {
   }
 
   /** Stop recording (POST /recording/stop). */
-  async stopRecording(): Promise<StopRecordingResponse> {
-    return this.request<StopRecordingResponse>("POST", "/recording/stop");
+  async stopRecording(options?: StopRecordingOptions): Promise<StopRecordingResponse> {
+    return this.request<StopRecordingResponse>("POST", "/recording/stop", options);
+  }
+
+  /** Convert an existing recording to GIF (POST /recordings/{name}/gif). */
+  async convertToGif(
+    name: string,
+    options?: { fps?: number; width?: number },
+  ): Promise<{ name: string; gif_path: string; gif_size: number }> {
+    return this.request("POST", `/recordings/${encodeURIComponent(name)}/gif`, {
+      fps: options?.fps ?? 10,
+      width: options?.width ?? 720,
+    });
   }
 
   /** Get elapsed recording time (GET /recording/elapsed). */
@@ -400,10 +430,14 @@ export class RecorderClient {
    *
    * Returns the raw {@link Response} body stream.
    */
-  async downloadRecording(name: string): Promise<ReadableStream<Uint8Array>> {
+  async downloadRecording(
+    name: string,
+    format?: string,
+  ): Promise<ReadableStream<Uint8Array>> {
+    const query = format && format !== "mp4" ? `?format=${format}` : "";
     const res = await this.request(
       "GET",
-      `/recordings/${encodeURIComponent(name)}`,
+      `/recordings/${encodeURIComponent(name)}${query}`,
       undefined,
       true,
     );
@@ -419,10 +453,12 @@ export class RecorderClient {
   async downloadRecordingToFile(
     name: string,
     destPath: string,
+    format?: string,
   ): Promise<void> {
+    const query = format && format !== "mp4" ? `?format=${format}` : "";
     const res = await this.request(
       "GET",
-      `/recordings/${encodeURIComponent(name)}`,
+      `/recordings/${encodeURIComponent(name)}${query}`,
       undefined,
       true,
     );
@@ -795,6 +831,7 @@ export class RecorderClient {
   async recording(
     name: string,
     fn: () => Promise<void>,
+    options?: StopRecordingOptions,
   ): Promise<StopRecordingResponse> {
     await this.startRecording(name);
     let fnError: unknown;
@@ -803,7 +840,7 @@ export class RecorderClient {
     } catch (err) {
       fnError = err;
     }
-    const result = await this.stopRecording();
+    const result = await this.stopRecording(options);
     if (fnError !== undefined) {
       throw fnError;
     }

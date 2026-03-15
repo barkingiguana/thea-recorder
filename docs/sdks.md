@@ -84,13 +84,15 @@ Every SDK provides:
 | `remove_panel(name)` | Remove panel |
 | `list_panels()` | List all panels |
 | `start_recording(name)` | Begin recording |
-| `stop_recording()` | Stop recording, get path + elapsed |
+| `stop_recording(gif, output_formats)` | Stop recording, get path + elapsed. Optional `gif=True` or `output_formats=["gif","webm"]` for format conversion |
 | `recording_elapsed()` | Get elapsed seconds |
 | `recording_status()` | Get recording state |
 | `add_annotation(label, time, details)` | Add a timestamped annotation to the active recording |
 | `list_annotations()` | List annotations for the active recording |
-| `list_recordings()` | List available MP4 files |
-| `download_recording(name, path)` | Download MP4 to local file |
+| `convert_to_gif(name)` | Convert an existing recording to GIF (two-pass palette-based, 10fps, 720px width) |
+| `convert_to_webm(name)` | Convert an existing recording to WebM (VP9) |
+| `list_recordings()` | List available recordings (includes `formats_available` per entry) |
+| `download_recording(name, path, format)` | Download recording to local file. Optional `format` (`"gif"`, `"webm"`) to download a converted version |
 | `recording_info(name)` | Get file metadata |
 | `display_screenshot(quality)` | Capture a JPEG screenshot of the live display |
 | `display_stream_url(fps)` | Get the MJPEG stream URL |

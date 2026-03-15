@@ -234,6 +234,42 @@ public class RecorderClient implements AutoCloseable {
     }
 
     /**
+     * Stops the current recording with GIF generation options.
+     *
+     * @param gif      whether to generate a GIF
+     * @param gifFps   frames per second for the GIF
+     * @param gifWidth width in pixels for the GIF
+     * @return the recording result
+     */
+    public RecordingResult stopRecording(boolean gif, int gifFps, int gifWidth) {
+        if (!gif) {
+            return stopRecording();
+        }
+        var fields = new LinkedHashMap<String, String>();
+        fields.put("gif", "true");
+        fields.put("gif_fps", String.valueOf(gifFps));
+        fields.put("gif_width", String.valueOf(gifWidth));
+        var json = post("/recording/stop", jsonObject(fields), 200);
+        return parseRecordingResult(json);
+    }
+
+    /**
+     * Stops the current recording with specific output formats.
+     *
+     * @param outputFormats list of desired output formats (e.g. "mp4", "gif", "webm")
+     * @return the recording result
+     */
+    public RecordingResult stopRecording(List<String> outputFormats) {
+        if (outputFormats == null || outputFormats.isEmpty()) {
+            return stopRecording();
+        }
+        var fields = new LinkedHashMap<String, String>();
+        fields.put("output_formats", jsonStringArray(outputFormats));
+        var json = post("/recording/stop", jsonObject(fields), 200);
+        return parseRecordingResult(json);
+    }
+
+    /**
      * Gets the elapsed time of the current recording.
      *
      * @return elapsed seconds
@@ -273,6 +309,56 @@ public class RecorderClient implements AutoCloseable {
             throw e;
         }
         return stopRecording();
+    }
+
+    /**
+     * Scoped recording helper with GIF generation options.
+     *
+     * @param name     recording name
+     * @param action   action to run while recording
+     * @param gif      whether to generate a GIF
+     * @param gifFps   frames per second for the GIF
+     * @param gifWidth width in pixels for the GIF
+     * @return the recording result
+     */
+    public RecordingResult recording(String name, Consumer<RecorderClient> action,
+                                     boolean gif, int gifFps, int gifWidth) {
+        startRecording(name);
+        try {
+            action.accept(this);
+        } catch (Exception e) {
+            try {
+                stopRecording();
+            } catch (Exception suppressed) {
+                e.addSuppressed(suppressed);
+            }
+            throw e;
+        }
+        return stopRecording(gif, gifFps, gifWidth);
+    }
+
+    /**
+     * Scoped recording helper with specific output formats.
+     *
+     * @param name          recording name
+     * @param action        action to run while recording
+     * @param outputFormats list of desired output formats (e.g. "mp4", "gif", "webm")
+     * @return the recording result
+     */
+    public RecordingResult recording(String name, Consumer<RecorderClient> action,
+                                     List<String> outputFormats) {
+        startRecording(name);
+        try {
+            action.accept(this);
+        } catch (Exception e) {
+            try {
+                stopRecording();
+            } catch (Exception suppressed) {
+                e.addSuppressed(suppressed);
+            }
+            throw e;
+        }
+        return stopRecording(outputFormats);
     }
 
     // ── Annotations ─────────────────────────────────────────────────────
@@ -380,6 +466,49 @@ public class RecorderClient implements AutoCloseable {
     public RecordingInfo recordingInfo(String name) {
         var json = get("/recordings/" + encode(name) + "/info", 200);
         return parseRecordingInfo(json);
+    }
+
+    /**
+     * Converts a recording to GIF format.
+     *
+     * @param name  recording name
+     * @param fps   frames per second for the GIF
+     * @param width width in pixels for the GIF
+     * @return conversion result as a map
+     */
+    public Map<String, Object> convertToGif(String name, int fps, int width) {
+        var fields = new LinkedHashMap<String, String>();
+        fields.put("fps", String.valueOf(fps));
+        fields.put("width", String.valueOf(width));
+        var json = post("/recordings/" + encode(name) + "/gif", jsonObject(fields), 200);
+        return parseJsonObject(json);
+    }
+
+    /**
+     * Downloads a recording in a specific format.
+     *
+     * @param name        recording name
+     * @param destination destination path
+     * @param format      output format (e.g. "mp4", "gif", "webm")
+     */
+    public void downloadRecording(String name, Path destination, String format) {
+        String query = "mp4".equals(format) ? "" : "?format=" + encode(format);
+        String path = "/recordings/" + encode(name) + query;
+        ensureReady(path);
+        var request = newRequest(path)
+                .GET()
+                .build();
+        try {
+            var response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(destination));
+            if (response.statusCode() != 200) {
+                throw new RecorderError(response.statusCode(),
+                        "Download failed: HTTP " + response.statusCode());
+            }
+        } catch (RecorderError e) {
+            throw e;
+        } catch (IOException | InterruptedException e) {
+            throw new RecorderError("Download failed", e);
+        }
     }
 
     /**
@@ -1214,6 +1343,60 @@ public class RecorderClient implements AutoCloseable {
     }
 
     /**
+     * Builds a JSON array of strings, e.g. ["a", "b", "c"].
+     */
+    static String jsonStringArray(List<String> values) {
+        var sb = new StringBuilder("[");
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) sb.append(",");
+            sb.append(jsonString(values.get(i)));
+        }
+        sb.append("]");
+        return sb.toString();
+    }
+
+    /**
+     * Parses a flat JSON object of string values into a Map, e.g. {"a":"x","b":"y"}.
+     */
+    static Map<String, String> parseStringMap(String json) {
+        var result = new LinkedHashMap<String, String>();
+        if (json == null) return result;
+        json = json.strip();
+        if (!json.startsWith("{") || !json.endsWith("}")) return result;
+        json = json.substring(1, json.length() - 1).strip();
+        if (json.isEmpty()) return result;
+        // Split by commas at the top level
+        int depth = 0;
+        boolean inStr = false;
+        int start = 0;
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (c == '\\' && inStr) { i++; continue; }
+            if (c == '"') inStr = !inStr;
+            else if (!inStr) {
+                if (c == '{' || c == '[') depth++;
+                else if (c == '}' || c == ']') depth--;
+                else if (c == ',' && depth == 0) {
+                    parseStringMapEntry(json.substring(start, i).strip(), result);
+                    start = i + 1;
+                }
+            }
+        }
+        parseStringMapEntry(json.substring(start).strip(), result);
+        return result;
+    }
+
+    private static void parseStringMapEntry(String entry, Map<String, String> map) {
+        int colon = entry.indexOf(':');
+        if (colon < 0) return;
+        String key = entry.substring(0, colon).strip();
+        String val = entry.substring(colon + 1).strip();
+        if (key.startsWith("\"") && key.endsWith("\"")) key = key.substring(1, key.length() - 1);
+        if (val.startsWith("\"") && val.endsWith("\"")) val = val.substring(1, val.length() - 1);
+        map.put(key, val);
+    }
+
+    /**
      * Parses a JSON array of strings, e.g. ["a", "b", "c"].
      */
     static List<String> parseStringArray(String json) {
@@ -1300,19 +1483,30 @@ public class RecorderClient implements AutoCloseable {
     // ── JSON → Record parsers ────────────────────────────────────────────
 
     private RecordingResult parseRecordingResult(String json) {
+        var extraPathsRaw = jsonRawValue(json, "extra_paths");
+        Map<String, String> extraPaths = extraPathsRaw != null ? parseStringMap(extraPathsRaw) : null;
         return new RecordingResult(
                 jsonValue(json, "name"),
                 jsonValue(json, "path"),
-                parseDouble(jsonValue(json, "elapsed"))
+                parseDouble(jsonValue(json, "elapsed")),
+                jsonValue(json, "gif_path"),
+                extraPaths
         );
     }
 
     private RecordingInfo parseRecordingInfo(String json) {
+        var formatsRaw = jsonRawValue(json, "formats_available");
+        List<String> formats = formatsRaw != null ? parseStringArray(formatsRaw) : null;
         return new RecordingInfo(
                 jsonValue(json, "name"),
                 jsonValue(json, "path"),
                 parseLong(jsonValue(json, "size")),
-                jsonValue(json, "created")
+                jsonValue(json, "created"),
+                jsonValue(json, "gif_path"),
+                parseLong(jsonValue(json, "gif_size")),
+                jsonValue(json, "webm_path"),
+                parseLong(jsonValue(json, "webm_size")),
+                formats
         );
     }
 
@@ -1471,12 +1665,7 @@ public class RecorderClient implements AutoCloseable {
         var elements = jsonArrayElements(json);
         var list = new ArrayList<RecordingInfo>(elements.size());
         for (var el : elements) {
-            list.add(new RecordingInfo(
-                    jsonValue(el, "name"),
-                    jsonValue(el, "path"),
-                    parseLong(jsonValue(el, "size")),
-                    jsonValue(el, "created")
-            ));
+            list.add(parseRecordingInfo(el));
         }
         return list;
     }
