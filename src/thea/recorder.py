@@ -641,6 +641,156 @@ class Recorder:
             )
         return result.stdout
 
+    # -- GIF conversion ----------------------------------------------------
+
+    @staticmethod
+    def convert_to_gif(
+        mp4_path: str,
+        *,
+        fps: int = 10,
+        width: int = 720,
+        gif_path: str | None = None,
+    ) -> str:
+        """Convert an MP4 file to a high-quality GIF using palette-based encoding.
+
+        Args:
+            mp4_path: Path to the source MP4 file.
+            fps: Frame rate for the GIF (default 10).
+            width: Width in pixels (height auto-scaled). Use -1 to keep original.
+            gif_path: Output path. Defaults to replacing .mp4 with .gif.
+
+        Returns:
+            Path to the generated GIF file.
+        """
+        if not os.path.isfile(mp4_path):
+            raise FileNotFoundError(f"MP4 not found: {mp4_path}")
+
+        if gif_path is None:
+            gif_path = re.sub(r"\.mp4$", ".gif", mp4_path, flags=re.IGNORECASE)
+            if gif_path == mp4_path:
+                gif_path = mp4_path + ".gif"
+
+        scale_filter = f"fps={fps},scale={width}:-1:flags=lanczos"
+
+        # Two-pass palette approach for high quality GIFs
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            palette_path = tmp.name
+
+        try:
+            # Pass 1: generate optimal palette
+            result = subprocess.run(
+                [
+                    "ffmpeg", "-y",
+                    "-i", mp4_path,
+                    "-vf", f"{scale_filter},palettegen=stats_mode=diff",
+                    palette_path,
+                ],
+                capture_output=True,
+                timeout=120,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"GIF palette generation failed: "
+                    f"{result.stderr.decode('utf-8', errors='replace')[-500:]}"
+                )
+
+            # Pass 2: encode GIF using the palette
+            result = subprocess.run(
+                [
+                    "ffmpeg", "-y",
+                    "-i", mp4_path,
+                    "-i", palette_path,
+                    "-lavfi", f"{scale_filter}[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5",
+                    gif_path,
+                ],
+                capture_output=True,
+                timeout=120,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"GIF encoding failed: "
+                    f"{result.stderr.decode('utf-8', errors='replace')[-500:]}"
+                )
+        finally:
+            try:
+                os.unlink(palette_path)
+            except OSError:
+                pass
+
+        logger.debug("GIF created -> %s", gif_path)
+        return gif_path
+
+    @staticmethod
+    def convert_to_webm(
+        mp4_path: str,
+        *,
+        width: int = -1,
+        webm_path: str | None = None,
+    ) -> str:
+        """Convert an MP4 file to WebM (VP9) format.
+
+        Args:
+            mp4_path: Path to the source MP4 file.
+            width: Width in pixels (height auto-scaled). Use -1 to keep original.
+            webm_path: Output path. Defaults to replacing .mp4 with .webm.
+
+        Returns:
+            Path to the generated WebM file.
+        """
+        if not os.path.isfile(mp4_path):
+            raise FileNotFoundError(f"MP4 not found: {mp4_path}")
+
+        if webm_path is None:
+            webm_path = re.sub(r"\.mp4$", ".webm", mp4_path, flags=re.IGNORECASE)
+            if webm_path == mp4_path:
+                webm_path = mp4_path + ".webm"
+
+        vf = f"scale={width}:-1" if width > 0 else None
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", mp4_path,
+        ]
+        if vf:
+            cmd += ["-vf", vf]
+        cmd += [
+            "-codec:v", "libvpx-vp9",
+            "-crf", "30",
+            "-b:v", "0",
+            "-an",
+            webm_path,
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, timeout=300)
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"WebM encoding failed: "
+                f"{result.stderr.decode('utf-8', errors='replace')[-500:]}"
+            )
+
+        logger.debug("WebM created -> %s", webm_path)
+        return webm_path
+
+    # Supported output formats beyond the default MP4.
+    EXTRA_FORMATS = ("gif", "webm")
+
+    @classmethod
+    def convert(cls, mp4_path: str, fmt: str, **kwargs) -> str:
+        """Convert an MP4 to another format.
+
+        Args:
+            mp4_path: Path to the source MP4 file.
+            fmt: Target format — ``"gif"`` or ``"webm"``.
+            **kwargs: Passed to the underlying converter.
+
+        Returns:
+            Path to the converted file.
+        """
+        if fmt == "gif":
+            return cls.convert_to_gif(mp4_path, **kwargs)
+        if fmt == "webm":
+            return cls.convert_to_webm(mp4_path, **kwargs)
+        raise ValueError(f"Unsupported format: {fmt!r} (expected one of {cls.EXTRA_FORMATS})")
+
     # -- Recording ---------------------------------------------------------
 
     @property
@@ -870,8 +1020,23 @@ class Recorder:
         warnings = self.validate_layout()
         return generate_testcard(w_int, canvas_h, regions, warnings=warnings)
 
-    def stop_recording(self):
-        """Stop ffmpeg gracefully and return the output path, or *None*."""
+    def stop_recording(
+        self,
+        *,
+        gif: bool = False,
+        gif_fps: int = 10,
+        gif_width: int = 720,
+        output_formats: list[str] | None = None,
+    ):
+        """Stop ffmpeg gracefully and return the output path, or *None*.
+
+        Args:
+            gif: If True, also convert the MP4 to a GIF (shorthand).
+            gif_fps: Frame rate for the GIF (default 10).
+            gif_width: Width in pixels for the GIF (default 720).
+            output_formats: List of additional formats to produce, e.g.
+                ``["gif", "webm"]``.  Overrides the *gif* flag.
+        """
         if not self._ffmpeg_proc:
             return None
 
@@ -909,6 +1074,25 @@ class Recorder:
         self._recording_start = None
 
         logger.debug("Recording stopped -> %s", path)
+
+        # Determine which extra formats to produce.
+        formats = list(output_formats) if output_formats else []
+        if gif and "gif" not in formats:
+            formats.append("gif")
+
+        extra_paths: dict[str, str] = {}
+        if formats and path and os.path.isfile(path):
+            for fmt in formats:
+                try:
+                    kwargs: dict = {}
+                    if fmt == "gif":
+                        kwargs = {"fps": gif_fps, "width": gif_width}
+                    extra_paths[fmt] = self.convert(path, fmt, **kwargs)
+                except Exception:
+                    logger.exception("Conversion to %s failed for %s", fmt, path)
+
+        if extra_paths:
+            return path, extra_paths
         return path
 
     # -- Lifecycle ---------------------------------------------------------

@@ -218,25 +218,41 @@ def create_app(
     def _safe_recording_name(name: str) -> bool:
         return ".." not in name and "/" not in name and "\\" not in name and name.strip() != ""
 
-    def _resolve_recording_path(name: str) -> str | None:
+    _FORMAT_EXTENSIONS = {"mp4": ".mp4", "gif": ".gif", "webm": ".webm"}
+    _MIMETYPES = {".mp4": "video/mp4", ".gif": "image/gif", ".webm": "video/webm"}
+
+    def _resolve_recording_path(name: str, fmt: str = "mp4") -> str | None:
         safe = re.sub(r"[^\w\-.]", "_", name)[:120]
-        path = os.path.join(output_dir, f"{safe}.mp4")
+        ext = _FORMAT_EXTENSIONS.get(fmt, f".{fmt}")
+        path = os.path.join(output_dir, f"{safe}{ext}")
         return path if os.path.isfile(path) else None
 
-    def _list_mp4s() -> list[dict]:
+    def _list_recordings() -> list[dict]:
         os.makedirs(output_dir, exist_ok=True)
         result = []
         for fname in sorted(os.listdir(output_dir)):
-            if not fname.endswith(".mp4"):
-                continue
-            fpath = os.path.join(output_dir, fname)
-            stat = os.stat(fpath)
-            result.append({
-                "name": fname[:-4],
-                "path": fpath,
-                "size": stat.st_size,
-                "created": datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).isoformat(),
-            })
+            if fname.endswith(".mp4"):
+                fpath = os.path.join(output_dir, fname)
+                stat = os.stat(fpath)
+                base = fname[:-4]
+                entry = {
+                    "name": base,
+                    "path": fpath,
+                    "size": stat.st_size,
+                    "format": "mp4",
+                    "created": datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).isoformat(),
+                }
+                # Check for companion formats
+                formats_available = ["mp4"]
+                for ext_name, ext in [("gif", ".gif"), ("webm", ".webm")]:
+                    alt_path = os.path.join(output_dir, base + ext)
+                    if os.path.isfile(alt_path):
+                        alt_stat = os.stat(alt_path)
+                        entry[f"{ext_name}_path"] = alt_path
+                        entry[f"{ext_name}_size"] = alt_stat.st_size
+                        formats_available.append(ext_name)
+                entry["formats_available"] = formats_available
+                result.append(entry)
         return result
 
     def _session_or_404(name: str):
@@ -489,13 +505,28 @@ img.onerror = function() {{
         return jsonify(result), 201
 
     def _impl_recording_stop(rec, sess_lock, cur_name, sess=None):
+        data = request.get_json(silent=True) or {}
+        want_gif = data.get("gif", False)
+        gif_fps = data.get("gif_fps", 10)
+        gif_width = data.get("gif_width", 720)
+        output_formats = data.get("output_formats")
         with sess_lock:
             if rec._ffmpeg_proc is None:
                 return jsonify({"error": "not recording"}), 409
             elapsed = rec.recording_elapsed
-            path = rec.stop_recording()
+            stop_result = rec.stop_recording(
+                gif=want_gif,
+                gif_fps=gif_fps,
+                gif_width=gif_width,
+                output_formats=output_formats,
+            )
             name = cur_name["name"]
             cur_name["name"] = None
+        if isinstance(stop_result, tuple):
+            path, extra_paths = stop_result
+        else:
+            path = stop_result
+            extra_paths = {}
         annotations = []
         if sess:
             with sess["events_lock"]:
@@ -503,6 +534,11 @@ img.onerror = function() {{
                 sess["annotations"] = []
             _emit_event(sess, "recording.stopped", {"name": name, "elapsed": round(elapsed, 2), "path": path})
         result = {"path": path, "elapsed": round(elapsed, 2), "name": name}
+        if extra_paths:
+            result["extra_paths"] = extra_paths
+            # Keep gif_path for backwards compatibility
+            if "gif" in extra_paths:
+                result["gif_path"] = extra_paths["gif"]
         if annotations:
             result["annotations"] = annotations
         return jsonify(result), 200
@@ -912,16 +948,23 @@ img.onerror = function() {{
 
     @app.route("/recordings", methods=["GET"])
     def recordings_list():
-        return jsonify(_list_mp4s()), 200
+        return jsonify(_list_recordings()), 200
 
     @app.route("/recordings/<name>", methods=["GET"])
     def recordings_download(name):
         if not _safe_recording_name(name):
             return jsonify({"error": "invalid recording name"}), 400
-        path = _resolve_recording_path(name)
-        if not path:
-            return jsonify({"error": f"recording '{name}' not found"}), 404
 
+        fmt = request.args.get("format", "mp4")
+        if fmt not in _FORMAT_EXTENSIONS:
+            return jsonify({"error": f"unsupported format: {fmt}"}), 400
+
+        path = _resolve_recording_path(name, fmt=fmt)
+        if not path:
+            return jsonify({"error": f"recording '{name}' not found (format={fmt})"}), 404
+
+        ext = os.path.splitext(path)[1]
+        mimetype = _MIMETYPES.get(ext, "application/octet-stream")
         file_size = os.path.getsize(path)
         range_header = request.headers.get("Range")
 
@@ -941,7 +984,7 @@ img.onerror = function() {{
             resp = Response(
                 data,
                 status=206,
-                mimetype="video/mp4",
+                mimetype=mimetype,
                 headers={
                     "Content-Range": f"bytes {start}-{end}/{file_size}",
                     "Content-Length": str(length),
@@ -953,10 +996,53 @@ img.onerror = function() {{
 
         return send_file(
             path,
-            mimetype="video/mp4",
+            mimetype=mimetype,
             as_attachment=True,
             download_name=os.path.basename(path),
         )
+
+    @app.route("/recordings/<name>/gif", methods=["POST"])
+    def recordings_convert_gif(name):
+        """Convert an existing MP4 recording to GIF."""
+        if not _safe_recording_name(name):
+            return jsonify({"error": "invalid recording name"}), 400
+        path = _resolve_recording_path(name)
+        if not path:
+            return jsonify({"error": f"recording '{name}' not found"}), 404
+        data = request.get_json(silent=True) or {}
+        fps = data.get("fps", 10)
+        width = data.get("width", 720)
+        try:
+            gif_path = Recorder.convert_to_gif(path, fps=fps, width=width)
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        stat = os.stat(gif_path)
+        return jsonify({
+            "name": name,
+            "gif_path": gif_path,
+            "gif_size": stat.st_size,
+        }), 201
+
+    @app.route("/recordings/<name>/webm", methods=["POST"])
+    def recordings_convert_webm(name):
+        """Convert an existing MP4 recording to WebM."""
+        if not _safe_recording_name(name):
+            return jsonify({"error": "invalid recording name"}), 400
+        path = _resolve_recording_path(name)
+        if not path:
+            return jsonify({"error": f"recording '{name}' not found"}), 404
+        data = request.get_json(silent=True) or {}
+        width = data.get("width", -1)
+        try:
+            webm_path = Recorder.convert_to_webm(path, width=width)
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 500
+        stat = os.stat(webm_path)
+        return jsonify({
+            "name": name,
+            "webm_path": webm_path,
+            "webm_size": stat.st_size,
+        }), 201
 
     @app.route("/recordings/<name>/screenshot", methods=["GET"])
     def recordings_screenshot(name):
