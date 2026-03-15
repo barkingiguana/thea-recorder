@@ -319,12 +319,72 @@ def start_recording(ctx, name):
 
 
 @main.command("stop-recording")
+@click.option("--gif", is_flag=True, default=False, help="Also produce a GIF version (great for PRs).")
+@click.option("--gif-fps", default=10, type=int, help="GIF frame rate (default: 10).")
+@click.option("--gif-width", default=720, type=int, help="GIF width in pixels (default: 720).")
+@click.option("--output-format", "output_formats", multiple=True,
+              type=click.Choice(["gif", "webm"]),
+              help="Additional output format(s). Can be specified multiple times.")
 @click.pass_context
-def stop_recording(ctx):
+def stop_recording(ctx, gif, gif_fps, gif_width, output_formats):
     """Stop recording and print the video path."""
     server = _server_url(ctx)
+    payload = {}
+    if output_formats:
+        payload["output_formats"] = list(output_formats)
+    if gif:
+        payload["gif"] = True
+        payload["gif_fps"] = gif_fps
+        payload["gif_width"] = gif_width
     try:
-        status, data = _request(f"{server}/recording/stop", method="POST")
+        status, data = _request(f"{server}/recording/stop", method="POST", data=payload or None)
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("convert-gif")
+@click.option("--name", required=True, help="Recording name to convert.")
+@click.option("--fps", default=10, type=int, help="GIF frame rate (default: 10).")
+@click.option("--width", default=720, type=int, help="GIF width in pixels (default: 720).")
+@click.pass_context
+def convert_gif(ctx, name, fps, width):
+    """Convert an existing recording to GIF."""
+    server = _server_url(ctx)
+    try:
+        status, data = _request(
+            f"{server}/recordings/{name}/gif",
+            method="POST",
+            data={"fps": fps, "width": width},
+        )
+    except (URLError, ConnectionError, OSError):
+        _handle_connection_error(server)
+    if status >= 400:
+        click.echo(f"Error: {data.get('error', 'unknown')}", err=True)
+        sys.exit(1)
+    _print_result(data, ctx.obj["quiet"], ctx.obj["pretty"])
+
+
+@main.command("convert")
+@click.option("--name", required=True, help="Recording name to convert.")
+@click.option("--format", "fmt", required=True, type=click.Choice(["gif", "webm"]),
+              help="Target format.")
+@click.option("--fps", default=10, type=int, help="GIF frame rate (default: 10).")
+@click.option("--width", default=720, type=int, help="Width in pixels (default: 720, -1 for original).")
+@click.pass_context
+def convert(ctx, name, fmt, fps, width):
+    """Convert an existing recording to another format."""
+    server = _server_url(ctx)
+    payload = {"fps": fps, "width": width}
+    try:
+        status, data = _request(
+            f"{server}/recordings/{name}/{fmt}",
+            method="POST",
+            data=payload,
+        )
     except (URLError, ConnectionError, OSError):
         _handle_connection_error(server)
     if status >= 400:

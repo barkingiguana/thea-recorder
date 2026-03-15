@@ -29,16 +29,23 @@ class RecordingResult:
     ----------
     name:    Recording name passed to ``start_recording``.
     path:    Absolute path to the saved MP4 file on the server.
+    gif_path: Absolute path to the GIF file, if GIF output was requested.
     elapsed: Duration of the recording in seconds.
     """
 
     def __init__(self) -> None:
         self.name: str | None = None
         self.path: str | None = None
+        self.gif_path: str | None = None
+        self.extra_paths: dict[str, str] | None = None
         self.elapsed: float | None = None
 
     def __repr__(self) -> str:
-        return f"RecordingResult(name={self.name!r}, path={self.path!r}, elapsed={self.elapsed})"
+        return (
+            f"RecordingResult(name={self.name!r}, path={self.path!r}, "
+            f"gif_path={self.gif_path!r}, extra_paths={self.extra_paths!r}, "
+            f"elapsed={self.elapsed})"
+        )
 
 
 class CompositionHelper:
@@ -320,12 +327,53 @@ class RecorderClient:
         """POST /recording/start — begin recording."""
         return self._request("POST", "/recording/start", {"name": name})
 
-    def stop_recording(self) -> dict[str, Any]:
+    def stop_recording(
+        self,
+        *,
+        gif: bool = False,
+        gif_fps: int = 10,
+        gif_width: int = 720,
+        output_formats: list[str] | None = None,
+    ) -> dict[str, Any]:
         """POST /recording/stop — stop current recording.
 
-        Returns dict with ``path``, ``elapsed``, and ``name``.
+        Args:
+            gif: If True, also convert the recording to GIF (shorthand).
+            gif_fps: Frame rate for the GIF (default 10).
+            gif_width: Width in pixels for the GIF (default 720).
+            output_formats: List of additional formats to produce, e.g.
+                ``["gif"]``, ``["gif", "webm"]``.
+
+        Returns dict with ``path``, ``elapsed``, ``name``, and
+        optionally ``gif_path`` and/or ``extra_paths``.
         """
-        return self._request("POST", "/recording/stop")
+        payload: dict[str, Any] = {}
+        if output_formats:
+            payload["output_formats"] = output_formats
+        if gif:
+            payload["gif"] = True
+            payload["gif_fps"] = gif_fps
+            payload["gif_width"] = gif_width
+        return self._request("POST", "/recording/stop", payload or None)
+
+    def convert_to_gif(
+        self,
+        name: str,
+        *,
+        fps: int = 10,
+        width: int = 720,
+    ) -> dict[str, Any]:
+        """POST /recordings/<name>/gif — convert an existing recording to GIF.
+
+        Args:
+            name: Recording name.
+            fps: Frame rate for the GIF (default 10).
+            width: Width in pixels for the GIF (default 720).
+
+        Returns dict with ``name``, ``gif_path``, and ``gif_size``.
+        """
+        payload: dict[str, Any] = {"fps": fps, "width": width}
+        return self._request("POST", f"/recordings/{name}/gif", payload)
 
     def recording_elapsed(self) -> dict[str, Any]:
         """GET /recording/elapsed — seconds elapsed for current recording."""
@@ -943,7 +991,13 @@ class RecorderClient:
 
     @contextmanager
     def recording(
-        self, name: str
+        self,
+        name: str,
+        *,
+        gif: bool = False,
+        gif_fps: int = 10,
+        gif_width: int = 720,
+        output_formats: list[str] | None = None,
     ) -> Generator[RecordingResult, None, None]:
         """Context manager that starts and stops a recording.
 
@@ -954,6 +1008,18 @@ class RecorderClient:
             print(result.path)     # MP4 path on server
             print(result.elapsed)  # duration in seconds
 
+        For GIF output (great for Pull Requests)::
+
+            with client.recording("demo", gif=True) as result:
+                ...
+            print(result.gif_path)  # GIF path on server
+
+        For multiple formats::
+
+            with client.recording("demo", output_formats=["gif", "webm"]) as result:
+                ...
+            print(result.extra_paths)  # {"gif": "...", "webm": "..."}
+
         The recording is stopped (and the MP4 finalised) even if the
         body raises an exception.
         """
@@ -963,8 +1029,13 @@ class RecorderClient:
         try:
             yield result
         finally:
-            stop = self.stop_recording()
+            stop = self.stop_recording(
+                gif=gif, gif_fps=gif_fps, gif_width=gif_width,
+                output_formats=output_formats,
+            )
             result.path = stop.get("path")
+            result.gif_path = stop.get("gif_path")
+            result.extra_paths = stop.get("extra_paths")
             result.elapsed = stop.get("elapsed")
 
     @contextmanager
