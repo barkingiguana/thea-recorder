@@ -110,6 +110,7 @@ def after_scenario(context, scenario):
     recorder.update_panel("status", scenario.status.name.upper())
     time.sleep(0.5)
     steps = list(context._step_events)
+    # Pass output_format="gif" to stop_recording() for GIF output.
     video_path = recorder.stop_recording()
     if video_path:
         context.recorded_videos.append({

@@ -66,7 +66,7 @@ new RecorderClient(options?: {
 | Method | Description |
 |--------|-------------|
 | `startRecording(name)` | Start recording with the given name |
-| `stopRecording()` | Stop recording; returns `{ path, elapsed, name }` |
+| `stopRecording(options?)` | Stop recording; returns `{ path, elapsed, name, gif_path?, extra_paths? }`. Pass `StopRecordingOptions` to produce GIF/WebM. |
 | `recordingElapsed()` | Get elapsed recording time |
 | `recordingStatus()` | Get recording status |
 
@@ -75,9 +75,10 @@ new RecorderClient(options?: {
 | Method | Description |
 |--------|-------------|
 | `listRecordings()` | List all recordings |
-| `downloadRecording(name)` | Download as `ReadableStream<Uint8Array>` |
-| `downloadRecordingToFile(name, path)` | Download and save to a local file |
-| `recordingInfo(name)` | Get metadata for a recording |
+| `convertToGif(name, options?)` | Convert an existing recording to GIF; options: `{ fps?, width? }` |
+| `downloadRecording(name, format?)` | Download as `ReadableStream<Uint8Array>`. Optional format: `"gif"`, `"webm"`. |
+| `downloadRecordingToFile(name, path, format?)` | Download and save to a local file. Optional format: `"gif"`, `"webm"`. |
+| `recordingInfo(name)` | Get metadata for a recording (includes `gif_path`, `webm_path`, `formats_available` when applicable) |
 
 ### System
 
@@ -94,6 +95,21 @@ new RecorderClient(options?: {
 const result = await client.recording("name", async () => {
   // ... your logic ...
 });
+
+// Record and also produce a GIF
+const result2 = await client.recording("name", async () => {
+  // ... your logic ...
+}, { gif: true, gif_fps: 10, gif_width: 720 });
+console.log(result2.gif_path); // path to the generated GIF
+
+// Stop with multiple output formats
+await client.stopRecording({ output_formats: ["gif", "webm"] });
+
+// Convert an existing recording to GIF
+const gif = await client.convertToGif("my-recording", { fps: 10, width: 720 });
+
+// Download a specific format
+await client.downloadRecordingToFile("my-recording", "output.gif", "gif");
 
 // Scoped panel — removed automatically when fn completes or throws
 await client.withPanel("code", "Source Code", 80, async () => {

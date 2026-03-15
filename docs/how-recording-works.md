@@ -439,4 +439,9 @@ rec.stop_recording()
 
 1. Sends `q` to ffmpeg's stdin (graceful quit)
 2. ffmpeg finalises the MP4 (writes moov atom, flushes buffers)
-3. The finished video file is ready to play
+3. The finished MP4 video file is ready to play
+4. If GIF or WebM output was requested (via `gif=True` or `output_formats`),
+   Thea runs additional ffmpeg passes to convert the MP4:
+   - **GIF**: a two-pass palette-based conversion (10fps, 720px width by default)
+     produces a high-quality GIF suitable for embedding in Pull Requests
+   - **WebM**: a VP9 encode produces an efficient web-friendly video

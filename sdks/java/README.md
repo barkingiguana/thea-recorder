@@ -75,14 +75,49 @@ client.startRecording("test-session");
 // ... perform actions ...
 RecordingResult result = client.stopRecording();
 
+// Stop with GIF generation
+RecordingResult result = client.stopRecording(true, 10, 800);
+System.out.println("GIF: " + result.gif_path());
+
+// Stop with specific output formats
+RecordingResult result = client.stopRecording(List.of("mp4", "gif", "webm"));
+System.out.println("Extra paths: " + result.extra_paths());
+
 // Scoped recording
 RecordingResult result = client.recording("test-session", c -> {
     // recording is active here
 });
 
+// Scoped recording with GIF options
+RecordingResult result = client.recording("test-session", c -> {
+    // recording is active here
+}, true, 10, 800);
+
+// Scoped recording with output formats
+RecordingResult result = client.recording("test-session", c -> {
+    // recording is active here
+}, List.of("mp4", "gif", "webm"));
+
 // Status
 RecordingStatus status = client.recordingStatus();
 double elapsed = client.recordingElapsed();
+```
+
+### GIF / WebM Output
+
+```java
+// Convert an existing recording to GIF
+Map<String, Object> gifResult = client.convertToGif("my-recording", 10, 800);
+
+// Download a recording in a specific format
+client.downloadRecording("my-recording", Path.of("output.gif"), "gif");
+client.downloadRecording("my-recording", Path.of("output.webm"), "webm");
+
+// Check available formats for a recording
+RecordingInfo info = client.recordingInfo("my-recording");
+System.out.println("Formats: " + info.formats_available());
+System.out.println("GIF path: " + info.gif_path());
+System.out.println("WebM path: " + info.webm_path());
 ```
 
 ### Recordings
@@ -93,6 +128,9 @@ RecordingInfo info = client.recordingInfo("my-recording");
 
 // Download to file
 client.downloadRecording("my-recording", Path.of("output.mp4"));
+
+// Download in a specific format
+client.downloadRecording("my-recording", Path.of("output.gif"), "gif");
 
 // Download to stream
 try (var out = new FileOutputStream("output.mp4")) {
@@ -115,8 +153,8 @@ All responses use Java records:
 | Record            | Fields                                        |
 |-------------------|-----------------------------------------------|
 | `Panel`           | `name`, `title`, `width`                      |
-| `RecordingResult` | `name`, `path`, `elapsed`                     |
-| `RecordingInfo`   | `name`, `path`, `size`, `created`             |
+| `RecordingResult` | `name`, `path`, `elapsed`, `gif_path`, `extra_paths` |
+| `RecordingInfo`   | `name`, `path`, `size`, `created`, `gif_path`, `gif_size`, `webm_path`, `webm_size`, `formats_available` |
 | `RecordingStatus` | `recording`, `name`, `elapsed`                |
 | `Health`          | `status`, `recording`, `display`, `panels`, `uptime` |
 

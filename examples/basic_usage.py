@@ -33,6 +33,9 @@ recorder.update_panel("log", "Step 1: Launching application\nStep 2: Performing 
 video_path = recorder.stop_recording()
 print(f"Video saved: {video_path}")
 
+# To produce a GIF instead of MP4, pass output_format="gif":
+#   video_path = recorder.stop_recording(output_format="gif")
+
 # 6. Generate an HTML report
 videos = [
     {

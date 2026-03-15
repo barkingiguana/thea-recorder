@@ -16,7 +16,7 @@ How to integrate the recorder into your existing workflow. Each example shows th
                                └──────┬───────────┘
                                       │
                                ┌──────┴───────────┐
-                               │  MP4 files +      │
+                               │  MP4/GIF/WebM +   │
                                │  HTML report      │
                                └──────────────────┘
 ```
@@ -316,3 +316,4 @@ class LoginTest {
 - **Use `/dashboard` in Docker** — expose port 9123 and open `http://localhost:9123/dashboard` in your browser to monitor all sessions from the host.
 - **Watch tests live** — use `display_stream_url()` or `display_viewer_url()` to stream the virtual display in real-time from your Docker host while tests are running.
 - **Generate CI report thumbnails** — use `recording_screenshot(name, time)` to extract a frame from a finished recording for use as a thumbnail in CI reports.
+- **Use GIF output for Pull Requests** — pass `gif=True` when stopping a recording (or use `convert_to_gif()` afterward) to produce a high-quality GIF that can be embedded directly in PR descriptions and comments. GIFs auto-play on GitHub, making test failures immediately visible to reviewers.

@@ -99,7 +99,50 @@ thea elapsed
 
 # Stop recording (prints path and elapsed)
 thea stop-recording
+
+# Stop recording and also produce a GIF
+thea stop-recording --gif
+
+# Stop recording and produce specific output formats
+thea stop-recording --output-format gif
+thea stop-recording --output-format webm
+
+# Convert an existing recording to GIF
+thea convert-gif --name login_test
+
+# Convert an existing recording to any format
+thea convert --name login_test --format gif
+thea convert --name login_test --format webm
 ```
+
+#### stop-recording flags
+
+| Flag | Description |
+|---|---|
+| `--gif` | Also produce a GIF version of the recording |
+| `--output-format` | Output format to produce in addition to MP4 (`gif` or `webm`) |
+
+#### convert-gif
+
+Converts an existing MP4 recording to GIF using a high-quality two-pass palette-based ffmpeg conversion (10fps, 720px width by default). GIFs are perfect for embedding in Pull Requests.
+
+```bash
+thea convert-gif --name login_test
+```
+
+#### convert
+
+Converts an existing MP4 recording to the specified format.
+
+```bash
+thea convert --name login_test --format gif
+thea convert --name login_test --format webm
+```
+
+| Flag | Required | Description |
+|---|---|---|
+| `--name` | yes | Name of the recording to convert |
+| `--format` | yes | Target format (`gif` or `webm`) |
 
 ### Annotations
 

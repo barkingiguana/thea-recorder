@@ -178,10 +178,37 @@ If there are layout validation issues, the response includes a `warnings` array:
 ```bash
 curl -X POST http://localhost:9123/recording/stop
 ```
+
+Optional body to request format conversion:
+```json
+{"gif": true}
+```
+or:
+```json
+{"output_formats": ["gif", "webm"]}
+```
+
 **Response** `200`:
 ```json
 {"path": "/app/recordings/login_test.mp4", "elapsed": 45.2, "name": "login_test"}
 ```
+
+When format conversion is requested, additional paths are included:
+```json
+{
+  "path": "/app/recordings/login_test.mp4",
+  "elapsed": 45.2,
+  "name": "login_test",
+  "gif_path": "/app/recordings/login_test.gif",
+  "webm_path": "/app/recordings/login_test.webm"
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `gif` | no | If `true`, convert the recording to GIF after stopping |
+| `output_formats` | no | Array of formats to produce, e.g. `["gif", "webm"]` |
+
 **Error** `409` if not recording.
 
 #### Get elapsed time
@@ -255,16 +282,26 @@ curl http://localhost:9123/recordings
     "name": "login_test",
     "path": "/app/recordings/login_test.mp4",
     "size": 1234567,
-    "created": "2026-03-10T14:30:00+00:00"
+    "created": "2026-03-10T14:30:00+00:00",
+    "formats_available": ["mp4", "gif"]
   }
 ]
 ```
+
+The `formats_available` array lists all formats that exist on disk for this recording (e.g. `["mp4"]`, `["mp4", "gif"]`, `["mp4", "gif", "webm"]`).
 
 #### Download recording
 ```bash
 curl -O http://localhost:9123/recordings/login_test
 ```
 **Response** `200` with `Content-Type: video/mp4` and `Content-Disposition: attachment`.
+
+Use the `format` query parameter to download in a specific format:
+```bash
+curl -O http://localhost:9123/recordings/login_test?format=gif
+curl -O http://localhost:9123/recordings/login_test?format=webm
+```
+**Error** `404` if the requested format has not been generated yet.
 
 **Range requests** for video seeking:
 ```bash
@@ -307,6 +344,30 @@ curl http://localhost:9123/recordings/login_test/info
   "created": "2026-03-10T14:30:00+00:00"
 }
 ```
+
+#### Convert recording to GIF
+```bash
+curl -X POST http://localhost:9123/recordings/login_test/gif
+```
+Converts an existing MP4 recording to GIF using a high-quality two-pass palette-based ffmpeg conversion (10fps, 720px width by default).
+
+**Response** `200`:
+```json
+{"path": "/app/recordings/login_test.gif", "size": 2345678}
+```
+**Error** `404` if recording doesn't exist.
+
+#### Convert recording to WebM
+```bash
+curl -X POST http://localhost:9123/recordings/login_test/webm
+```
+Converts an existing MP4 recording to WebM using VP9 encoding.
+
+**Response** `200`:
+```json
+{"path": "/app/recordings/login_test.webm", "size": 987654}
+```
+**Error** `404` if recording doesn't exist.
 
 ### Layout Validation
 

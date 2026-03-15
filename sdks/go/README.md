@@ -76,14 +76,16 @@ func main() {
 | Method | Description |
 |--------|-------------|
 | `StartRecording(ctx, name)` | Begin recording |
-| `StopRecording(ctx)` | Stop recording, returns `*RecordingResult` |
-| `Recording(ctx, name)` | Returns a `stop` func — ideal with `defer` |
+| `StopRecording(ctx, opts...)` | Stop recording, returns `*RecordingResult`. Pass `StopRecordingOptions` to request GIF/WebM output. |
+| `Recording(ctx, name, opts...)` | Returns a `stop` func — ideal with `defer`. Accepts optional `StopRecordingOptions`. |
+| `ConvertToGIF(ctx, name, fps, width)` | Convert an existing recording to GIF |
 | `RecordingElapsed(ctx)` | Elapsed seconds of current recording |
 | `RecordingStatusInfo(ctx)` | Full recording status |
 | `ListRecordings(ctx)` | List all stored recordings |
-| `GetRecordingInfo(ctx, name)` | Metadata for a single recording |
-| `DownloadRecording(ctx, name, w)` | Stream MP4 to an `io.Writer` |
-| `DownloadRecordingToFile(ctx, name, path)` | Download MP4 to a local file |
+| `GetRecordingInfo(ctx, name)` | Metadata for a single recording (includes GIF/WebM info if available) |
+| `DownloadRecording(ctx, name, w)` | Stream recording to an `io.Writer` |
+| `DownloadRecordingFormat(ctx, name, format, w)` | Stream recording in a specific format (`"mp4"`, `"gif"`, `"webm"`) to an `io.Writer` |
+| `DownloadRecordingToFile(ctx, name, path)` | Download recording to a local file |
 
 ### Utility
 
@@ -102,6 +104,42 @@ var recErr *thea.RecorderError
 if errors.As(err, &recErr) {
     log.Printf("HTTP %d: %s", recErr.StatusCode, recErr.Body)
 }
+```
+
+## GIF / WebM output
+
+You can request GIF (or other format) output when stopping a recording:
+
+```go
+result, err := client.StopRecording(ctx, thea.StopRecordingOptions{
+    GIF:      true,
+    GIFFps:   10,
+    GIFWidth: 640,
+})
+// result.GifPath contains the path to the generated GIF.
+// result.ExtraPaths has any additional output format paths.
+```
+
+Or convert an existing recording after the fact:
+
+```go
+info, err := client.ConvertToGIF(ctx, "demo", 10, 640)
+```
+
+To download a recording in a specific format:
+
+```go
+f, _ := os.Create("demo.gif")
+defer f.Close()
+client.DownloadRecordingFormat(ctx, "demo", "gif", f)
+```
+
+The `Recording` helper also accepts options:
+
+```go
+stop, err := client.Recording(ctx, "demo", thea.StopRecordingOptions{GIF: true})
+if err != nil { log.Fatal(err) }
+defer stop()
 ```
 
 ## Testing

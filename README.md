@@ -1,8 +1,8 @@
 # thea-recorder
 
-**Record your Xvfb virtual display as MP4 video with live panel overlays and interactive HTML reports.**
+**Record your Xvfb virtual display as MP4, GIF, or WebM video with live panel overlays and interactive HTML reports.**
 
-thea-recorder captures anything running in a virtual display — browser-based E2E tests, GUI applications, desktop automation scripts, product demos — as an MP4 video with a live overlay bar showing status panels, step timelines, and custom context. It then generates an interactive HTML report where you can click any step and watch exactly what happened.
+thea-recorder captures anything running in a virtual display — browser-based E2E tests, GUI applications, desktop automation scripts, product demos — as MP4, GIF, or WebM video with a live overlay bar showing status panels, step timelines, and custom context. It then generates an interactive HTML report where you can click any step and watch exactly what happened.
 
 ## Why
 
@@ -16,7 +16,7 @@ When something visual runs in CI — a test, a demo, a GUI app — and it fails,
 
 This is absurd. The screen was *right there* doing the thing. You just weren't watching.
 
-thea-recorder fixes this by recording the virtual display during execution. Every session gets its own MP4. The panel overlay shows you the current status and any custom context you want. The HTML report lets you click a step and the video seeks to that exact moment.
+thea-recorder fixes this by recording the virtual display during execution. Every session gets its own MP4 (with optional GIF or WebM conversion). The panel overlay shows you the current status and any custom context you want. The HTML report lets you click a step and the video seeks to that exact moment.
 
 **You stop guessing. You start watching.**
 
@@ -38,6 +38,7 @@ If it has a window and can run on X11, thea can record it.
 - **CLI** — server mode and client mode, scriptable from any language
 - **Panel overlay system** — named columns below the viewport with live-updating text
 - **Smart scrolling** — panels auto-scroll to keep the active content visible
+- **GIF and WebM output** — convert recordings to GIF (palette-based, ideal for PRs) or WebM (VP9)
 - **Interactive HTML reports** — embedded videos with clickable step timelines
 - **Video composition** — tile multiple recordings side-by-side with highlight borders
 - **Framework agnostic** — works with any test runner, GUI app, or automation script
@@ -170,6 +171,19 @@ thea start-display
 thea start-recording --name my-test
 ```
 
+## Output Formats
+
+Recordings are captured as MP4 by default. You can also produce GIF or WebM:
+
+- **GIF** — high-quality two-pass palette-based ffmpeg conversion (10fps, 720px width by default). Perfect for embedding in Pull Requests.
+- **WebM** — VP9 encoding for efficient web-friendly video.
+
+Three ways to get alternate formats:
+
+1. **CLI**: `thea stop-recording --gif` or `thea stop-recording --output-format gif`. Convert existing recordings with `thea convert-gif --name my_test` or `thea convert --name my_test --format webm`.
+2. **API/SDK**: `client.stop_recording(gif=True)` or `client.stop_recording(output_formats=["gif", "webm"])`.
+3. **HTTP**: `POST /recordings/<name>/gif` or `POST /recordings/<name>/webm` to convert existing recordings. `GET /recordings/<name>?format=gif` to download in a specific format.
+
 ## Docker
 
 ```dockerfile
@@ -244,7 +258,7 @@ The HTML report is a single self-contained file with:
 | `remove_panel(name)` | Remove a panel |
 | `update_panel(name, text, focus_line)` | Update panel content |
 | `start_recording(filename)` | Start ffmpeg capture |
-| `stop_recording()` | Stop capture, return MP4 path |
+| `stop_recording(gif, output_formats)` | Stop capture, return path(s). Optional `gif=True` or `output_formats=["gif","webm"]` for format conversion |
 | `recording_elapsed` | Seconds since recording started |
 | `cleanup()` | Stop everything, remove temp files |
 
